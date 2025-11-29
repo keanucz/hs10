@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
     document.getElementById('create-project-btn').addEventListener('click', openCreateModal);
     document.getElementById('create-project-form').addEventListener('submit', handleCreateProject);
+    document.getElementById('repo-option').addEventListener('change', handleWorkspaceSourceChange);
+    handleWorkspaceSourceChange();
 }
 
 async function loadProjects() {
@@ -86,6 +88,7 @@ function openCreateModal() {
 function closeCreateModal() {
     document.getElementById('create-project-modal').style.display = 'none';
     document.getElementById('create-project-form').reset();
+    handleWorkspaceSourceChange();
 }
 
 async function handleCreateProject(e) {
@@ -98,6 +101,17 @@ async function handleCreateProject(e) {
 
     const name = document.getElementById('project-name').value;
     const description = document.getElementById('project-description').value;
+    const repoOption = document.getElementById('repo-option').value;
+    const repoUrlInput = document.getElementById('repo-url');
+    const repoUrl = repoUrlInput.value.trim();
+
+    if (repoOption === 'clone' && !repoUrl) {
+        alert('Please provide a repository URL to clone.');
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+        repoUrlInput.focus();
+        return;
+    }
 
     console.log('Creating project:', { name, description });
 
@@ -107,7 +121,9 @@ async function handleCreateProject(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 name,
-                description
+                description,
+                repo_option: repoOption,
+                repo_url: repoUrl || undefined
             })
         });
 
@@ -129,6 +145,24 @@ async function handleCreateProject(e) {
     } finally {
         submitBtn.textContent = originalText;
         submitBtn.disabled = false;
+    }
+}
+
+function handleWorkspaceSourceChange() {
+    const repoOption = document.getElementById('repo-option');
+    const repoUrlGroup = document.getElementById('repo-url-group');
+    const repoUrlInput = document.getElementById('repo-url');
+
+    if (!repoOption || !repoUrlGroup || !repoUrlInput) {
+        return;
+    }
+
+    const shouldShowRepoUrl = repoOption.value === 'clone';
+    repoUrlGroup.style.display = shouldShowRepoUrl ? 'block' : 'none';
+    repoUrlInput.required = shouldShowRepoUrl;
+
+    if (!shouldShowRepoUrl) {
+        repoUrlInput.value = '';
     }
 }
 

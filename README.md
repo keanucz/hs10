@@ -54,14 +54,16 @@ replychat/
 - ✅ **Message persistence** - SQLite database with WAL mode
 - ✅ **Single binary** - Embedded templates and static assets
 - ✅ **Smooth scrolling** - Styled scrollbar and chat area
+- ✅ **Project workspaces** - Every project gets an isolated `data/projects/<project-id>` directory
+- ✅ **Git bootstrap** - Choose between initializing a repo or cloning an existing remote during project creation
+- ✅ **Agent file editing** - Agents apply JSON action plans directly to the filesystem using native Go APIs
 
 ### Coming Soon (See FUTURE-DEVELOPMENT.md)
 
 - 🔄 **Kanban board** - Visual task management
 - 🔄 **Autonomous agents** - Agents pick up and execute tasks automatically
-- 🔄 **Git integration** - Agents commit to your repository
-- 🔄 **File editing** - Agents create and modify code files
-- 🔄 **Project isolation** - Multiple workspaces
+- 🔄 **Git upstream sync** - Agents push commits and manage branches
+- 🔄 **Workspace diff viewer** - Inspect and approve agent changes before they land
 
 ## Setup Instructions
 
@@ -73,41 +75,47 @@ replychat/
 ### Local Development
 
 1. Clone the repository and navigate to the project:
-```bash
-cd replychat
-```
 
-2. Create environment file:
-```bash
-cp .env.example .env
-```
+  ```bash
+  cd replychat
+  ```
 
-3. Edit `.env` and add your configuration:
-```bash
-PORT=8080
-OPENAI_API_KEY=your_key_here
-```
+1. Create environment file:
 
-4. Download dependencies:
-```bash
-go mod download
-```
+  ```bash
+  cp .env.example .env
+  ```
 
-5. Run the application:
-```bash
-go run ./src
-```
+1. Edit `.env` and add your configuration:
 
-6. Open browser to `http://localhost:8080`
+  ```bash
+  PORT=8080
+  OPENAI_API_KEY=your_key_here
+  ```
+
+1. Download dependencies:
+
+  ```bash
+  go mod download
+  ```
+
+1. Run the application:
+
+  ```bash
+  go run ./src
+  ```
+
+1. Open browser to `http://localhost:8080`
 
 ### Docker Deployment
 
 1. Build and run with Docker Compose:
-```bash
-docker-compose up --build
-```
 
-2. Access at `http://localhost:8080`
+  ```bash
+  docker-compose up --build
+  ```
+
+1. Access at `http://localhost:8080`
 
 ### Building Binary
 
@@ -122,7 +130,20 @@ CGO_ENABLED=0 go build -o replychat ./src
 
 1. Open `http://localhost:8080` in your browser
 2. Enter your name and email to log in
-3. You'll be redirected to the project workspace
+3. You'll land on the Projects dashboard where you can open an existing workspace or create a new one
+
+### Creating a Project Workspace
+
+1. Click **+ Create New Project** on the Projects dashboard
+1. Enter the project name and an optional description
+1. Choose the workspace source:
+
+  - **Initialize an empty Git repository** – creates `data/projects/<project-id>` and runs `git init`
+  - **Clone an existing repository** – provide any HTTPS/SSH remote; the server clones it into the workspace directory
+
+1. Submit the form to create the project; the API responds with the workspace path for logging
+
+Workspaces live on disk under `data/projects/`. Agents never leave this directory tree thanks to secure path joining. The agent action plans (see `OPENAI_INTEGRATION.md`) create and mutate files directly in these folders, so you can open them in your editor or run `git status` immediately after an agent responds.
 
 ### Chat Interface
 
@@ -133,6 +154,7 @@ CGO_ENABLED=0 go build -o replychat ./src
 ### Using AI Agents
 
 **@Mention (Recommended):**
+
 - `@pm` - Product Manager
 - `@backend` - Backend Architect
 - `@frontend` - Frontend Developer
@@ -140,6 +162,7 @@ CGO_ENABLED=0 go build -o replychat ./src
 Type `@` to see autocomplete dropdown. Use arrow keys or click to select.
 
 **Keyword Triggers (Fallback):**
+
 - "requirement", "feature", "need" → Product Manager
 - "api", "backend", "database" → Backend Architect
 - "ui", "frontend", "component" → Frontend Developer
@@ -149,6 +172,7 @@ Type `@` to see autocomplete dropdown. Use arrow keys or click to select.
 Messages use JSON format:
 
 **Client → Server:**
+
 ```json
 {
   "type": "chat.message",
@@ -160,6 +184,7 @@ Messages use JSON format:
 ```
 
 **Server → Client:**
+
 ```json
 {
   "type": "message.received",
@@ -182,6 +207,7 @@ Messages use JSON format:
 ### Core Tables
 
 **users:**
+
 - id (TEXT, primary key)
 - email (TEXT, unique, not null)
 - name (TEXT, not null)
@@ -189,11 +215,13 @@ Messages use JSON format:
 - created_at (TIMESTAMP)
 
 **sessions:**
+
 - id (TEXT, primary key)
 - user_id (TEXT, foreign key)
 - created_at (TIMESTAMP)
 
 **projects:**
+
 - id (TEXT, primary key)
 - name (TEXT, not null)
 - description (TEXT)
@@ -202,6 +230,7 @@ Messages use JSON format:
 - created_at (TIMESTAMP)
 
 **messages:**
+
 - id (TEXT, primary key)
 - project_id (TEXT, foreign key)
 - sender_id (TEXT)
@@ -212,6 +241,7 @@ Messages use JSON format:
 - timestamp (TIMESTAMP)
 
 **agents:**
+
 - id (TEXT, primary key)
 - project_id (TEXT, foreign key)
 - name (TEXT)
@@ -222,6 +252,7 @@ Messages use JSON format:
 - created_at (TIMESTAMP)
 
 **issues:**
+
 - id (TEXT, primary key)
 - project_id (TEXT, foreign key)
 - title (TEXT)
@@ -235,6 +266,7 @@ Messages use JSON format:
 - tags (TEXT, JSON)
 
 **artifacts:**
+
 - id (TEXT, primary key)
 - issue_id (TEXT, foreign key)
 - type (TEXT: code/schema/design/document)
@@ -254,25 +286,28 @@ Messages use JSON format:
 Edit `src/agents/processor.go`:
 
 1. Add keywords to the `keywords` map:
-```go
-keywords := map[string]string{
-    "your_keyword": "your_agent_type",
-}
-```
 
-2. Add response template:
-```go
-responses := map[string]string{
-    "your_agent_type": "Your agent response",
-}
-```
+   ```go
+   keywords := map[string]string{
+     "your_keyword": "your_agent_type",
+   }
+   ```
 
-3. Add agent name:
-```go
-agentNames := map[string]string{
-    "your_agent_type": "Your Agent Name",
-}
-```
+1. Add response template:
+
+   ```go
+   responses := map[string]string{
+     "your_agent_type": "Your agent response",
+   }
+   ```
+
+1. Add agent name:
+
+   ```go
+   agentNames := map[string]string{
+     "your_agent_type": "Your Agent Name",
+   }
+   ```
 
 ### Adding API Routes
 
@@ -321,6 +356,7 @@ The Hub pattern manages connected clients and message broadcasting:
 ### Session Management
 
 Cookie-based sessions with database lookup:
+
 1. User logs in → session ID created
 2. Session ID stored in HTTP-only cookie
 3. Each request validates session against database
@@ -328,6 +364,7 @@ Cookie-based sessions with database lookup:
 ### Graceful Shutdown
 
 Signal handling ensures clean shutdown:
+
 1. Listen for SIGINT/SIGTERM
 2. Close HTTP server with timeout
 3. Close database connections
@@ -354,6 +391,7 @@ SELECT * FROM users;
 ### Logging
 
 All logs include file and line number for debugging:
+
 ```go
 log.SetFlags(log.LstdFlags | log.Lshortfile)
 ```

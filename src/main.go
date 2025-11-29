@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"replychat/src/agents"
+	"replychat/src/projectfs"
 	"strings"
 	"sync"
 	"syscall"
@@ -671,7 +672,7 @@ func projectsAPIHandler(w http.ResponseWriter, r *http.Request) {
 
 func listProjectsHandler(w http.ResponseWriter, r *http.Request, userID string) {
 	rows, err := db.Query(`
-		SELECT DISTINCT p.id, p.name, p.description, p.owner_id, p.created_at,
+		SELECT DISTINCT p.id, p.name, p.description, p.owner_id, p.created_at, p.settings,
 		       (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) as member_count
 		FROM projects p
 		LEFT JOIN project_members pm ON p.id = pm.project_id
@@ -690,9 +691,10 @@ func listProjectsHandler(w http.ResponseWriter, r *http.Request, userID string) 
 		var id, name, ownerID string
 		var description sql.NullString
 		var createdAt time.Time
+		var settings sql.NullString
 		var memberCount int
 
-		rows.Scan(&id, &name, &description, &ownerID, &createdAt, &memberCount)
+		rows.Scan(&id, &name, &description, &ownerID, &createdAt, &settings, &memberCount)
 
 		project := map[string]interface{}{
 			"id":           id,
@@ -702,6 +704,14 @@ func listProjectsHandler(w http.ResponseWriter, r *http.Request, userID string) 
 			"created_at":   createdAt,
 			"member_count": memberCount,
 		}
+
+		if settings.Valid {
+			var decoded map[string]interface{}
+			if err := json.Unmarshal([]byte(settings.String), &decoded); err == nil {
+				project["settings"] = decoded
+			}
+		}
+
 		projects = append(projects, project)
 	}
 
@@ -715,6 +725,8 @@ func createProjectHandler(w http.ResponseWriter, r *http.Request, userID string)
 	var req struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
+		RepoOption  string `json:"repo_option"`
+		RepoURL     string `json:"repo_url"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -756,11 +768,23 @@ func createProjectHandler(w http.ResponseWriter, r *http.Request, userID string)
 		return
 	}
 
-	log.Printf("Project created successfully: %s", projectID)
+	settings, err := projectfs.SetupProjectWorkspace(projectID, req.RepoOption, req.RepoURL)
+	if err != nil {
+		log.Printf("workspace: failed to setup workspace for project %s: %v", projectID, err)
+		http.Error(w, fmt.Sprintf("Workspace error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := projectfs.SaveSettings(db, projectID, settings); err != nil {
+		log.Printf("workspace: failed to save settings for project %s: %v", projectID, err)
+	}
+
+	log.Printf("Project created successfully: %s (workspace: %s)", projectID, settings.WorkspacePath)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"id": projectID,
+		"id":            projectID,
+		"workspacePath": settings.WorkspacePath,
 	})
 }
 

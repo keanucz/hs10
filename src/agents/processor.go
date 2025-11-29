@@ -4,10 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"replychat/src/projectfs"
 
 	"github.com/google/uuid"
 	openai "github.com/openai/openai-go/v3"
@@ -25,6 +30,36 @@ type AgentResponse struct {
 	Type    string                 `json:"type"`
 	Payload map[string]interface{} `json:"payload"`
 }
+
+type AgentActionPlan struct {
+	Files     []GeneratedFile `json:"files"`
+	Mutations []FileMutation  `json:"mutations"`
+	Notes     []string        `json:"notes"`
+}
+
+type GeneratedFile struct {
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Overwrite bool   `json:"overwrite"`
+}
+
+type FileMutation struct {
+	Path    string `json:"path"`
+	Find    string `json:"find"`
+	Replace string `json:"replace"`
+}
+
+const planFormatInstructions = `Always respond with a minified JSON object describing the work you performed.
+Schema: {
+  "files": [
+    {"path": "relative/path.ext", "content": "full file contents", "overwrite": true}
+  ],
+  "mutations": [
+    {"path": "relative/path.ext", "find": "exact substring to replace", "replace": "new text"}
+  ],
+  "notes": ["short status strings"]
+}
+Paths must stay inside the assigned project workspace. Do not wrap JSON in code fences or add commentary.`
 
 func ProcessMessage(db *sql.DB, broadcast chan<- []byte, projectID, content, userID string) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
@@ -102,23 +137,35 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 	}
 
 	var responseText string
+	var planNotes []string
+
+	workspacePath, workspaceErr := p.ensureWorkspace(projectID)
+	if workspaceErr != nil {
+		log.Printf("workspace: failed to prepare workspace for project %s: %v", projectID, workspaceErr)
+	}
 
 	if p.aiClient != nil {
 		systemPrompts := map[string]string{
-			"product_manager": `You are a Product Manager AI agent in a collaborative team workspace.
-	Your role is to gather requirements, create user stories, and define project scope.
-	Be concise and helpful. Ask clarifying questions when needed.
-	Keep responses under 200 words.`,
+			"product_manager": fmt.Sprintf(`You are a Product Manager AI agent in a collaborative team workspace.
+		Your role is to gather requirements, create user stories, and define project scope.
+		Be concise and helpful. Ask clarifying questions when needed.
+		Keep responses under 200 words.
 
-			"backend_architect": `You are a Backend Architect AI agent in a collaborative team workspace.
-Your role is to design APIs, database schemas, and server architecture.
-Be technical but clear. Provide concrete suggestions.
-Keep responses under 200 words.`,
+		%s`, planFormatInstructions),
 
-			"frontend_developer": `You are a Frontend Developer AI agent in a collaborative team workspace.
-Your role is to build UI components, handle state management, and ensure responsive design.
-Be practical and focus on implementation. Share best practices.
-Keep responses under 200 words.`,
+			"backend_architect": fmt.Sprintf(`You are a Backend Architect AI agent in a collaborative team workspace.
+	Your role is to design APIs, database schemas, and server architecture.
+	Be technical but clear. Provide concrete suggestions.
+	Keep responses under 200 words.
+
+	%s`, planFormatInstructions),
+
+			"frontend_developer": fmt.Sprintf(`You are a Frontend Developer AI agent in a collaborative team workspace.
+	Your role is to build UI components, handle state management, and ensure responsive design.
+	Be practical and focus on implementation. Share best practices.
+	Keep responses under 200 words.
+
+	%s`, planFormatInstructions),
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -126,8 +173,16 @@ Keep responses under 200 words.`,
 
 		inputMessages := responses.ResponseInputParam{
 			responses.ResponseInputItemParamOfMessage(systemPrompts[agentType], responses.EasyInputMessageRoleSystem),
-			responses.ResponseInputItemParamOfMessage(originalMessage, responses.EasyInputMessageRoleUser),
 		}
+
+		if workspaceErr == nil && workspacePath != "" {
+			inputMessages = append(inputMessages, responses.ResponseInputItemParamOfMessage(
+				fmt.Sprintf("Project workspace root: %s. Only create or edit files within this directory.", workspacePath),
+				responses.EasyInputMessageRoleSystem,
+			))
+		}
+
+		inputMessages = append(inputMessages, responses.ResponseInputItemParamOfMessage(originalMessage, responses.EasyInputMessageRoleUser))
 
 		resp, err := p.aiClient.Responses.New(ctx, responses.ResponseNewParams{
 			Model:           openai.ResponsesModel(openai.ChatModelGPT4oMini),
@@ -140,7 +195,23 @@ Keep responses under 200 words.`,
 			log.Printf("agent: OpenAI API error: %v", err)
 			responseText = p.getFallbackResponse(agentType)
 		} else if output := resp.OutputText(); output != "" {
-			responseText = output
+			if workspaceErr == nil {
+				plan, planErr := parseActionPlan(output)
+				if planErr == nil && plan.HasChanges() {
+					summary, applyErr := p.applyActionPlan(workspacePath, agentType, plan)
+					if applyErr != nil {
+						log.Printf("agent: failed to apply plan for project %s: %v", projectID, applyErr)
+						responseText = fmt.Sprintf("%s produced changes but hit an error: %v", agentNames[agentType], applyErr)
+					} else {
+						responseText = summary
+						planNotes = plan.Notes
+					}
+				} else {
+					responseText = output
+				}
+			} else {
+				responseText = output
+			}
 		} else {
 			responseText = p.getFallbackResponse(agentType)
 		}
@@ -178,6 +249,14 @@ Keep responses under 200 words.`,
 		},
 	}
 
+	if len(planNotes) > 0 {
+		response.Payload["notes"] = planNotes
+	}
+
+	if workspaceErr == nil && workspacePath != "" {
+		response.Payload["workspacePath"] = workspacePath
+	}
+
 	responseJSON, _ := json.Marshal(response)
 	p.broadcast <- responseJSON
 
@@ -185,6 +264,130 @@ Keep responses under 200 words.`,
 		strings.Contains(strings.ToLower(originalMessage), "add task") {
 		p.proposeTask(projectID, agentType)
 	}
+}
+
+func (plan AgentActionPlan) HasChanges() bool {
+	return len(plan.Files) > 0 || len(plan.Mutations) > 0
+}
+
+func (p *MessageProcessor) ensureWorkspace(projectID string) (string, error) {
+	settings, err := projectfs.LoadSettings(p.db, projectID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+
+	workspacePath := settings.WorkspacePath
+	if workspacePath == "" {
+		workspacePath = projectfs.WorkspacePath(projectID)
+	}
+
+	if err := projectfs.EnsureWorkspace(workspacePath); err != nil {
+		return "", err
+	}
+
+	if settings.WorkspacePath == "" {
+		settings.WorkspacePath = workspacePath
+		if err := projectfs.SaveSettings(p.db, projectID, settings); err != nil {
+			log.Printf("workspace: unable to save default settings for %s: %v", projectID, err)
+		}
+	}
+
+	return workspacePath, nil
+}
+
+func (p *MessageProcessor) applyActionPlan(workspacePath, agentType string, plan AgentActionPlan) (string, error) {
+	filesWritten := 0
+	mutationsApplied := 0
+
+	for _, file := range plan.Files {
+		if file.Path == "" {
+			continue
+		}
+
+		absPath, err := secureJoin(workspacePath, file.Path)
+		if err != nil {
+			return "", err
+		}
+
+		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+			return "", fmt.Errorf("failed to prepare directory for %s: %w", file.Path, err)
+		}
+
+		if !file.Overwrite {
+			if _, err := os.Stat(absPath); err == nil {
+				continue
+			}
+		}
+
+		if err := os.WriteFile(absPath, []byte(file.Content), 0o644); err != nil {
+			return "", fmt.Errorf("failed to write file %s: %w", file.Path, err)
+		}
+		filesWritten++
+	}
+
+	for _, mutation := range plan.Mutations {
+		if mutation.Path == "" || mutation.Find == "" {
+			continue
+		}
+
+		absPath, err := secureJoin(workspacePath, mutation.Path)
+		if err != nil {
+			return "", err
+		}
+
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read %s for mutation: %w", mutation.Path, err)
+		}
+
+		original := string(content)
+		if !strings.Contains(original, mutation.Find) {
+			continue
+		}
+
+		updated := strings.Replace(original, mutation.Find, mutation.Replace, 1)
+		if err := os.WriteFile(absPath, []byte(updated), 0o644); err != nil {
+			return "", fmt.Errorf("failed to apply mutation to %s: %w", mutation.Path, err)
+		}
+		mutationsApplied++
+	}
+
+	summary := fmt.Sprintf("%s updated workspace %s (files=%d, mutations=%d)", agentType, workspacePath, filesWritten, mutationsApplied)
+	if len(plan.Notes) > 0 {
+		summary = summary + "; notes: " + strings.Join(plan.Notes, "; ")
+	}
+
+	return summary, nil
+}
+
+func secureJoin(basePath, relative string) (string, error) {
+	cleanBase := filepath.Clean(basePath)
+	cleanRel := filepath.Clean(relative)
+	joined := filepath.Join(cleanBase, cleanRel)
+
+	if !strings.HasPrefix(joined, cleanBase) {
+		return "", fmt.Errorf("path %s escapes workspace", relative)
+	}
+	return joined, nil
+}
+
+func parseActionPlan(output string) (AgentActionPlan, error) {
+	clean := strings.TrimSpace(output)
+	var plan AgentActionPlan
+	if err := json.Unmarshal([]byte(clean), &plan); err == nil {
+		return plan, nil
+	}
+
+	start := strings.Index(clean, "{")
+	end := strings.LastIndex(clean, "}")
+	if start >= 0 && end > start {
+		candidate := clean[start : end+1]
+		if err := json.Unmarshal([]byte(candidate), &plan); err == nil {
+			return plan, nil
+		}
+	}
+
+	return AgentActionPlan{}, fmt.Errorf("unable to parse agent plan output")
 }
 
 func (p *MessageProcessor) getFallbackResponse(agentType string) string {

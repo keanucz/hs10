@@ -1,87 +1,142 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Projects - ReplyChat</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="/static/projects.css">
-</head>
-<body>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/projects.css" />
+  </head>
+  <body>
     <div class="projects-container">
-        <header class="projects-header">
-            <div class="header-content">
-                <h1>ReplyChat Projects</h1>
-                <div class="header-actions">
-                    <span class="user-name">{{.Username}}</span>
-                    <a href="/logout" class="btn-secondary">Logout</a>
-                </div>
-            </div>
-        </header>
+      <header class="projects-header">
+        <div class="header-content">
+          <h1>ReplyChat Projects</h1>
+          <div class="header-actions">
+            <span class="user-name">{{.Username}}</span>
+            <a href="/logout" class="btn-secondary">Logout</a>
+          </div>
+        </div>
+      </header>
 
-        <main class="projects-main">
-            <div class="projects-intro">
-                <h2>Your Projects</h2>
-                <p>Select a project to work with your AI team, or create a new one.</p>
-                <button id="create-project-btn" class="btn-primary">+ Create New Project</button>
-            </div>
+      <main class="projects-main">
+        <div class="projects-intro">
+          <h2>Your Projects</h2>
+          <p>
+            Select a project to work with your AI team, or create a new one.
+          </p>
+          <button id="create-project-btn" class="btn-primary">
+            + Create New Project
+          </button>
+        </div>
 
-            <div class="projects-grid" id="projects-grid">
-                <div class="loading">Loading projects...</div>
-            </div>
-        </main>
+        <div class="projects-grid" id="projects-grid">
+          <div class="loading">Loading projects...</div>
+        </div>
+      </main>
     </div>
 
     <!-- Create Project Modal -->
-    <div id="create-project-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Create New Project</h2>
-                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="create-project-form">
-                    <div class="form-group">
-                        <label for="project-name">Project Name</label>
-                        <input type="text" id="project-name" placeholder="My Awesome Project" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="project-description">Description</label>
-                        <textarea id="project-description" rows="4" placeholder="What is this project about?"></textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" onclick="closeCreateModal()" class="btn-secondary">Cancel</button>
-                        <button type="submit" class="btn-primary">Create Project</button>
-                    </div>
-                </form>
-            </div>
+    <div id="create-project-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Create New Project</h2>
+          <button class="modal-close" onclick="closeCreateModal()">
+            &times;
+          </button>
         </div>
+        <div class="modal-body">
+          <form id="create-project-form">
+            <div class="form-group">
+              <label for="project-name">Project Name</label>
+              <input
+                type="text"
+                id="project-name"
+                placeholder="My Awesome Project"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="project-description">Description</label>
+              <textarea
+                id="project-description"
+                rows="4"
+                placeholder="What is this project about?"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="repo-option">Workspace Source</label>
+              <select id="repo-option">
+                <option value="init" selected>
+                  Initialize an empty Git repository
+                </option>
+                <option value="clone">Clone an existing repository</option>
+              </select>
+              <p class="field-help">
+                Choose how the project workspace should be prepared.
+              </p>
+            </div>
+            <div class="form-group" id="repo-url-group" style="display: none">
+              <label for="repo-url">Repository URL</label>
+              <input
+                type="url"
+                id="repo-url"
+                placeholder="https://github.com/owner/repo.git"
+              />
+              <p class="field-help">
+                Provide an SSH or HTTPS Git URL to clone.
+              </p>
+            </div>
+            <div class="form-actions">
+              <button
+                type="button"
+                onclick="closeCreateModal()"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn-primary">Create Project</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
 
     <!-- Invite Modal -->
-    <div id="invite-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Invite Team Members</h2>
-                <button class="modal-close" onclick="closeInviteModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Share this invite link with your team:</p>
-                <div class="invite-link-container">
-                    <input type="text" id="invite-link" readonly class="invite-link-input">
-                    <button onclick="copyInviteLink()" class="btn-primary">Copy Link</button>
-                </div>
-                <p class="invite-info">This link will allow others to join your project.</p>
-            </div>
+    <div id="invite-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Invite Team Members</h2>
+          <button class="modal-close" onclick="closeInviteModal()">
+            &times;
+          </button>
         </div>
+        <div class="modal-body">
+          <p>Share this invite link with your team:</p>
+          <div class="invite-link-container">
+            <input
+              type="text"
+              id="invite-link"
+              readonly
+              class="invite-link-input"
+            />
+            <button onclick="copyInviteLink()" class="btn-primary">
+              Copy Link
+            </button>
+          </div>
+          <p class="invite-info">
+            This link will allow others to join your project.
+          </p>
+        </div>
+      </div>
     </div>
 
     <script>
-        window.userData = {
-            userId: "{{.UserID}}",
-            username: "{{.Username}}"
-        };
+      window.userData = {
+        userId: "{{.UserID}}",
+        username: "{{.Username}}",
+      };
     </script>
     <script src="/static/projects.js"></script>
-</body>
+  </body>
 </html>

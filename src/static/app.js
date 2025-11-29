@@ -4,6 +4,9 @@ let isConnecting = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let projectId = "default";
+const agentCardMap = {};
+const dialogCards = {};
+let dialogOverlay = null;
 
 const messagesArea = document.getElementById("messages");
 const messageForm = document.getElementById("message-form");
@@ -88,14 +91,23 @@ function handleWebSocketMessage(data) {
         case "message.received":
             addMessage(data.payload.message);
             break;
-        case "agent.status":
-            updateAgentStatus(data.payload);
-            break;
         case "issue.created":
             handleIssueCreated(data.payload);
             break;
+        case "issue.updated":
+            handleIssueUpdated(data.payload);
+            break;
+        case "agent.queue":
+            handleAgentQueueUpdate(data.payload);
+            break;
         case "dialog.requested":
             handleDialogRequest(data.payload);
+            break;
+        case "dialog.responded":
+            handleDialogResponded(data.payload);
+            break;
+        case "agent.status":
+            updateAgentStatus(data.payload);
             break;
         default:
             console.log("Unknown message type:", data.type);
@@ -152,7 +164,22 @@ function addSystemMessage(text) {
 }
 
 function updateAgentStatus(data) {
-    console.log("Agent status update:", data);
+    if (!data || data.projectId !== projectId) {
+        return;
+    }
+
+    const statuses = data.statuses || [];
+    statuses.forEach((stat) => {
+        updateAgentCardFromQueue(stat);
+
+        const entry = agentCardMap[stat.agent_id];
+        if (!entry || !entry.taskEl) {
+            return;
+        }
+        entry.taskEl.textContent = stat.current_issue_title
+            ? `Task: ${stat.current_issue_title}`
+            : "No active task";
+    });
 }
 
 function handleIssueCreated(data) {
@@ -160,9 +187,246 @@ function handleIssueCreated(data) {
     addSystemMessage(`New task proposed: ${data.issue.title}`);
 }
 
+function handleIssueUpdated(data) {
+    if (!data || !data.issue) {
+        return;
+    }
+    const issue = data.issue;
+    addSystemMessage(`Task updated: ${issue.title} (${issue.status || 'updated'})`);
+}
+
+function handleAgentQueueUpdate(data) {
+    if (!data || !data.projectId || data.projectId !== projectId) {
+        return;
+    }
+
+    const queues = data.queues || [];
+    queues.forEach(updateAgentCardFromQueue);
+}
+
+function updateAgentCardFromQueue(stat) {
+    if (!stat || !stat.agent_id) {
+        return;
+    }
+
+    const entry = agentCardMap[stat.agent_id];
+    if (!entry) {
+        return;
+    }
+
+    if (entry.queueEl) {
+        entry.queueEl.textContent = String(stat.queue_depth || 0);
+    }
+
+    if (entry.statusEl) {
+        const status = stat.status || (stat.queue_depth > 0 ? "queued" : "idle");
+        entry.statusEl.textContent = formatAgentStatus(status);
+        entry.statusEl.classList.remove("idle", "working", "waiting", "queued");
+        entry.statusEl.classList.add(status);
+    }
+}
+
 function handleDialogRequest(data) {
-    console.log("Dialog requested:", data);
-    addSystemMessage(`Agent ${data.agentId} is asking a question`);
+    if (!data || !data.dialog) {
+        return;
+    }
+    renderDialogCard(data.dialog);
+    const agentName = formatAgentName(data.agentId || "agent");
+    addSystemMessage(`${agentName} requested input: ${data.dialog.title || "Decision"}`);
+}
+
+function handleDialogResponded(data) {
+    if (!data || !data.dialog) {
+        return;
+    }
+    removeDialogCard(data.dialog.id);
+    const responder = data.dialog.respondedByName || "A teammate";
+    const title = data.dialog.title || "dialog";
+    const choice = data.dialog.selectedOption || "an option";
+    addSystemMessage(`${responder} selected "${choice}" for ${title}.`);
+}
+
+function initAgentCards() {
+    document.querySelectorAll(".agent-card[data-agent-id]").forEach((card) => {
+        const agentId = card.dataset.agentId;
+        if (!agentId) {
+            return;
+        }
+        agentCardMap[agentId] = {
+            statusEl: card.querySelector(".agent-status"),
+            queueEl: card.querySelector(".agent-queue-count"),
+            taskEl: card.querySelector(".agent-task"),
+        };
+    });
+}
+
+function initDialogUI() {
+    dialogOverlay = document.getElementById("dialog-overlay");
+    if (dialogOverlay) {
+        dialogOverlay.innerHTML = "";
+        dialogOverlay.style.display = "none";
+    }
+}
+
+function renderDialogCard(dialog) {
+    if (!dialogOverlay || !dialog || !dialog.id) {
+        return;
+    }
+
+    removeDialogCard(dialog.id);
+    dialogOverlay.style.display = "flex";
+
+    const card = document.createElement("div");
+    card.className = "dialog-card";
+
+    const titleEl = document.createElement("h4");
+    titleEl.textContent = dialog.title || `Decision requested by ${formatAgentName(dialog.agentId || "agent")}`;
+    card.appendChild(titleEl);
+
+    if (dialog.message) {
+        const messageEl = document.createElement("p");
+        messageEl.textContent = dialog.message;
+        card.appendChild(messageEl);
+    }
+
+    const optionsEl = document.createElement("div");
+    optionsEl.className = "dialog-options";
+    const options = dialog.options && dialog.options.length ? dialog.options : [];
+
+    if (options.length === 0 && dialog.defaultOption) {
+        options.push(dialog.defaultOption);
+    }
+
+    if (options.length === 0) {
+        const waiting = document.createElement("p");
+        waiting.textContent = "Waiting for more details...";
+        optionsEl.appendChild(waiting);
+    } else {
+        options.forEach((opt) => {
+            const btn = document.createElement("button");
+            btn.className = "dialog-option-btn";
+            btn.textContent = opt;
+            btn.onclick = () => respondToDialog(dialog.id, opt);
+            optionsEl.appendChild(btn);
+        });
+    }
+
+    card.appendChild(optionsEl);
+    dialogOverlay.appendChild(card);
+    dialogCards[dialog.id] = card;
+}
+
+function removeDialogCard(dialogId) {
+    if (!dialogId || !dialogCards[dialogId]) {
+        return;
+    }
+    const card = dialogCards[dialogId];
+    if (card.parentNode) {
+        card.parentNode.removeChild(card);
+    }
+    delete dialogCards[dialogId];
+    if (dialogOverlay && Object.keys(dialogCards).length === 0) {
+        dialogOverlay.style.display = "none";
+    }
+}
+
+function formatAgentStatus(status) {
+    switch (status) {
+        case "working":
+            return "Working";
+        case "queued":
+        case "waiting":
+            return "Queued";
+        default:
+            return "Idle";
+    }
+}
+
+function formatAgentName(agentId) {
+    const map = {
+        "product_manager": "Product Manager",
+        "backend_architect": "Backend Architect",
+        "frontend_developer": "Frontend Developer"
+    };
+    return map[agentId] || agentId || "Agent";
+}
+
+async function fetchAgentQueues() {
+    if (!projectId) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/agent-queues?project_id=${projectId}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        handleAgentQueueUpdate({
+            projectId,
+            queues: data.queues || [],
+        });
+    } catch (err) {
+        console.error("Failed to load agent queues", err);
+    }
+}
+
+async function fetchAgentStatus() {
+    if (!projectId) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/agent-status?project_id=${projectId}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        updateAgentStatus({ projectId, statuses: data.statuses || [] });
+    } catch (err) {
+        console.error("Failed to load agent status", err);
+    }
+}
+
+async function fetchDialogs() {
+    if (!projectId) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/dialogs?project_id=${projectId}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        (data.dialogs || [])
+            .filter((dialog) => dialog.status === "open")
+            .forEach(renderDialogCard);
+    } catch (err) {
+        console.error("Failed to load dialogs", err);
+    }
+}
+
+async function respondToDialog(dialogId, option) {
+    if (!dialogId) return;
+
+    try {
+        const response = await fetch(`/api/dialogs/${dialogId}/respond`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ selected_option: option })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.selectedOption && data.title) {
+                addSystemMessage(`You selected "${data.selectedOption}" for ${data.title}.`);
+            }
+            removeDialogCard(dialogId);
+        }
+    } catch (err) {
+        console.error("Failed to respond to dialog", err);
+    }
 }
 
 function sendMessage(content) {
@@ -327,4 +591,9 @@ if (window.userData && window.userData.projectId) {
     projectId = window.userData.projectId;
 }
 
+initAgentCards();
+initDialogUI();
 connectWebSocket();
+fetchDialogs();
+fetchAgentQueues();
+fetchAgentStatus();

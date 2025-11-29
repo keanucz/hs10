@@ -87,6 +87,34 @@
     overflow-y: hidden;
 }
 
+.agent-queue-bar {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0 1.5rem 1rem 1.5rem;
+    flex-wrap: wrap;
+}
+
+.agent-queue-chip {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8125rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.agent-queue-chip.queued {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.agent-queue-chip .agent-queue-count {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
 .kanban-column {
     flex: 0 0 300px;
     display: flex;
@@ -137,6 +165,11 @@
     cursor: pointer;
     transition: all 0.2s;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.task-card.task-queued {
+    border-color: #4338ca;
+    box-shadow: 0 2px 6px rgba(67, 56, 202, 0.2);
 }
 
 .task-card:hover {
@@ -200,6 +233,19 @@
     align-items: center;
     font-size: 0.75rem;
     color: var(--text-secondary);
+}
+
+.task-queue-badge {
+    margin-bottom: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: #eef2ff;
+    color: #4338ca;
 }
 
 .task-agent {

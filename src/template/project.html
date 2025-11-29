@@ -26,25 +26,31 @@
             <div class="agents-section">
                 <h3>Active Agents</h3>
                 <div id="agents-list" class="agents-list">
-                    <div class="agent-card">
+                    <div class="agent-card" data-agent-id="product_manager">
                         <div class="agent-avatar">PM</div>
                         <div class="agent-details">
                             <div class="agent-name">Product Manager</div>
                             <div class="agent-status idle">Idle</div>
+                            <div class="agent-task">No active task</div>
+                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
                         </div>
                     </div>
-                    <div class="agent-card">
+                    <div class="agent-card" data-agent-id="backend_architect">
                         <div class="agent-avatar">BA</div>
                         <div class="agent-details">
                             <div class="agent-name">Backend Architect</div>
                             <div class="agent-status idle">Idle</div>
+                            <div class="agent-task">No active task</div>
+                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
                         </div>
                     </div>
-                    <div class="agent-card">
+                    <div class="agent-card" data-agent-id="frontend_developer">
                         <div class="agent-avatar">FE</div>
                         <div class="agent-details">
                             <div class="agent-name">Frontend Developer</div>
                             <div class="agent-status idle">Idle</div>
+                            <div class="agent-task">No active task</div>
+                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
                         </div>
                     </div>
                 </div>
@@ -128,6 +134,7 @@
             projectName: "{{.ProjectName}}"
         };
     </script>
+    <div id="dialog-overlay" class="dialog-overlay" style="display: none;"></div>
     <script src="/static/app.js"></script>
 </body>
 </html>

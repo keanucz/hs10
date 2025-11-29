@@ -1,5 +1,6 @@
 let tasks = [];
 let draggedTask = null;
+const agentQueueSummary = document.getElementById('agent-queue-summary');
 
 // Load tasks on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,6 +23,7 @@ async function loadTasks() {
         const data = await response.json();
         tasks = data.issues || [];
         renderTasks();
+        await loadAgentQueues();
     } catch (err) {
         console.error('Failed to load tasks:', err);
     }
@@ -73,6 +75,10 @@ function createTaskCard(task) {
     card.draggable = true;
     card.dataset.taskId = task.id;
 
+    if (task.queued_agent_id) {
+        card.classList.add('task-queued');
+    }
+
     card.addEventListener('click', () => openTaskModal(task));
     card.addEventListener('dragstart', handleDragStart);
     card.addEventListener('dragend', handleDragEnd);
@@ -87,6 +93,7 @@ function createTaskCard(task) {
         <span class="task-priority ${task.priority}">${task.priority.toUpperCase()}</span>
         <div class="task-title">${escapeHtml(task.title)}</div>
         <div class="task-description">${escapeHtml(task.description || '')}</div>
+        ${task.queued_agent_id ? `<div class="task-queue-badge">Queued → ${formatAgentName(task.queued_agent_id)}</div>` : ''}
         <div class="task-meta">
             <div class="task-agent">
                 ${task.assigned_agent_id ? `
@@ -188,6 +195,51 @@ async function handleCreateTask(e) {
     }
 }
 
+async function loadAgentQueues() {
+    if (!agentQueueSummary) return;
+
+    try {
+        const projectId = window.userData && window.userData.projectId ? window.userData.projectId : 'default';
+        const response = await fetch(`/api/agent-queues?project_id=${projectId}`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        renderAgentQueues(data.queues || []);
+    } catch (err) {
+        console.error('Failed to load agent queues:', err);
+    }
+}
+
+function renderAgentQueues(stats) {
+    if (!agentQueueSummary) return;
+
+    const statMap = {};
+    stats.forEach(stat => {
+        if (stat && stat.agent_id) {
+            statMap[stat.agent_id] = stat;
+        }
+    });
+
+    agentQueueSummary.querySelectorAll('.agent-queue-chip').forEach(chip => {
+        const agentId = chip.dataset.agentId;
+        const countEl = chip.querySelector('.agent-queue-count');
+        const stat = statMap[agentId];
+        const queueDepth = stat ? stat.queue_depth : 0;
+
+        if (countEl) {
+            countEl.textContent = queueDepth;
+        }
+
+        if (stat && stat.status === 'working') {
+            chip.classList.add('queued');
+        } else if (queueDepth > 0) {
+            chip.classList.add('queued');
+        } else {
+            chip.classList.remove('queued');
+        }
+    });
+}
+
 function openTaskModal(task) {
     const modal = document.getElementById('task-modal');
     const title = document.getElementById('modal-title');
@@ -220,8 +272,12 @@ function openTaskModal(task) {
                 <p>${task.assigned_agent_id ? agentFullNames[task.assigned_agent_id] : 'Unassigned'}</p>
             </div>
             <div class="form-group">
+                <label>Queue Status</label>
+                <p>${task.queued_agent_id ? `Queued → ${formatAgentName(task.queued_agent_id)}` : 'Not queued'}</p>
+            </div>
+            <div class="form-group">
                 <label>Created</label>
-                <p>${formatDate(task.queued_at || task.created_at)}</p>
+                <p>${formatDate(task.created_at)}</p>
             </div>
             ${task.status === 'proposed' ? `
                 <div class="task-actions">

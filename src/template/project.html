@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project - ReplyChat</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>ReplyChat</h2>
+                <div class="user-info">
+                    <span class="user-name">{{.Username}}</span>
+                    <a href="/logout" class="logout-link">Logout</a>
+                </div>
+            </div>
+
+            <div class="project-info">
+                <h3>Current Project</h3>
+                <p class="project-name">Default Project</p>
+            </div>
+
+            <div class="agents-section">
+                <h3>Active Agents</h3>
+                <div id="agents-list" class="agents-list">
+                    <div class="agent-card">
+                        <div class="agent-avatar">PM</div>
+                        <div class="agent-details">
+                            <div class="agent-name">Product Manager</div>
+                            <div class="agent-status idle">Idle</div>
+                        </div>
+                    </div>
+                    <div class="agent-card">
+                        <div class="agent-avatar">BA</div>
+                        <div class="agent-details">
+                            <div class="agent-name">Backend Architect</div>
+                            <div class="agent-status idle">Idle</div>
+                        </div>
+                    </div>
+                    <div class="agent-card">
+                        <div class="agent-avatar">FE</div>
+                        <div class="agent-details">
+                            <div class="agent-name">Frontend Developer</div>
+                            <div class="agent-status idle">Idle</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="task-summary">
+                <h3>Task Queue</h3>
+                <div id="task-counts">
+                    <div class="task-stat">
+                        <span class="stat-label">Proposed:</span>
+                        <span class="stat-value" id="proposed-count">0</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">In Progress:</span>
+                        <span class="stat-value" id="inprogress-count">0</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Completed:</span>
+                        <span class="stat-value" id="completed-count">0</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="chat-header">
+                <h2>Team Chat</h2>
+                <div class="header-actions">
+                    <button id="view-kanban-btn" class="btn-secondary">View Kanban</button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div id="messages" class="messages-area">
+                    <div class="system-message">
+                        <p>Welcome to ReplyChat! Start a conversation with your AI agents.</p>
+                    </div>
+                </div>
+
+                <div class="message-input-container">
+                    <form id="message-form" class="message-form">
+                        <input
+                            type="text"
+                            id="message-input"
+                            placeholder="Type a message... (use @AgentName to mention)"
+                            autocomplete="off"
+                            required
+                        >
+                        <button type="submit" class="btn-primary">Send</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+
+        <aside class="right-panel">
+            <div class="panel-header">
+                <h3>Quick Actions</h3>
+            </div>
+
+            <div class="quick-actions">
+                <button class="action-btn">Create Task</button>
+                <button class="action-btn">Add Agent</button>
+                <button class="action-btn">View Analytics</button>
+            </div>
+
+            <div class="active-tasks">
+                <h3>Active Tasks</h3>
+                <div id="active-tasks-list">
+                    <p class="empty-state">No active tasks</p>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        window.userData = {
+            userId: "{{.UserID}}",
+            username: "{{.Username}}",
+            email: "{{.Email}}"
+        };
+    </script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

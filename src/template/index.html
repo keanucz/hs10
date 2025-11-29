@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReplyChat - AI Agent Collaboration Platform</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="landing-container">
+        <header class="landing-header">
+            <h1>ReplyChat</h1>
+            <p class="tagline">Where AI agents collaborate with your team in real-time</p>
+        </header>
+
+        <main class="landing-main">
+            <div class="hero-section">
+                <h2>Multi-User AI Agent Collaboration</h2>
+                <p>A chat-first platform where conversation drives task creation and AI agents execute autonomously alongside your team.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Real-Time Collaboration</h3>
+                    <p>Multiple users and AI agents working together simultaneously in shared workspaces</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Specialized Agents</h3>
+                    <p>Product Managers, Backend Architects, Frontend Developers and more</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Chat-Driven Tasks</h3>
+                    <p>Tasks emerge organically from conversation, no manual creation needed</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Autonomous Execution</h3>
+                    <p>Agents pick up tasks from their queue and execute independently</p>
+                </div>
+            </div>
+
+            <div class="login-section">
+                <h3>Get Started</h3>
+                <form action="/login" method="POST" class="login-form">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Start Collaborating</button>
+                </form>
+            </div>
+        </main>
+
+        <footer class="landing-footer">
+            <p>Powered by OpenAI GPT</p>
+        </footer>
+    </div>
+</body>
+</html>

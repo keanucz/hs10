@@ -1,0 +1,8 @@
+.env
+*.db
+*.db-shm
+*.db-wal
+data/
+replychat
+*.log
+.DS_Store

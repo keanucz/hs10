@@ -2,7 +2,7 @@
 *.db
 *.db-shm
 *.db-wal
-data/
+data/*
 replychat
 *.log
 .DS_Store

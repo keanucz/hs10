@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	openai "github.com/sashabaranov/go-openai"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/responses"
 )
 
 type MessageProcessor struct {
@@ -28,7 +30,8 @@ func ProcessMessage(db *sql.DB, broadcast chan<- []byte, projectID, content, use
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	var client *openai.Client
 	if apiKey != "" {
-		client = openai.NewClient(apiKey)
+		newClient := openai.NewClient(option.WithAPIKey(apiKey))
+		client = &newClient
 	}
 
 	processor := &MessageProcessor{
@@ -103,9 +106,9 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 	if p.aiClient != nil {
 		systemPrompts := map[string]string{
 			"product_manager": `You are a Product Manager AI agent in a collaborative team workspace.
-Your role is to gather requirements, create user stories, and define project scope.
-Be concise and helpful. Ask clarifying questions when needed.
-Keep responses under 200 words.`,
+	Your role is to gather requirements, create user stories, and define project scope.
+	Be concise and helpful. Ask clarifying questions when needed.
+	Keep responses under 200 words.`,
 
 			"backend_architect": `You are a Backend Architect AI agent in a collaborative team workspace.
 Your role is to design APIs, database schemas, and server architecture.
@@ -121,27 +124,23 @@ Keep responses under 200 words.`,
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		resp, err := p.aiClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-			Model: openai.GPT4oMini,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: systemPrompts[agentType],
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: originalMessage,
-				},
-			},
-			MaxTokens:   300,
-			Temperature: 0.7,
+		inputMessages := responses.ResponseInputParam{
+			responses.ResponseInputItemParamOfMessage(systemPrompts[agentType], responses.EasyInputMessageRoleSystem),
+			responses.ResponseInputItemParamOfMessage(originalMessage, responses.EasyInputMessageRoleUser),
+		}
+
+		resp, err := p.aiClient.Responses.New(ctx, responses.ResponseNewParams{
+			Model:           openai.ResponsesModel(openai.ChatModelGPT4oMini),
+			Input:           responses.ResponseNewParamsInputUnion{OfInputItemList: inputMessages},
+			MaxOutputTokens: openai.Int(300),
+			Temperature:     openai.Float(0.7),
 		})
 
 		if err != nil {
 			log.Printf("agent: OpenAI API error: %v", err)
 			responseText = p.getFallbackResponse(agentType)
-		} else if len(resp.Choices) > 0 {
-			responseText = resp.Choices[0].Message.Content
+		} else if output := resp.OutputText(); output != "" {
+			responseText = output
 		} else {
 			responseText = p.getFallbackResponse(agentType)
 		}

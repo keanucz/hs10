@@ -41,30 +41,46 @@ func ProcessMessage(db *sql.DB, broadcast chan<- []byte, projectID, content, use
 }
 
 func (p *MessageProcessor) analyzeAndRespond(projectID, content, userID string) {
-	keywords := map[string]string{
-		"requirement":    "product_manager",
-		"feature":        "product_manager",
-		"api":            "backend_architect",
-		"backend":        "backend_architect",
-		"database":       "backend_architect",
-		"ui":             "frontend_developer",
-		"frontend":       "frontend_developer",
-		"component":      "frontend_developer",
-		"need":           "product_manager",
-		"want":           "product_manager",
-		"build":          "product_manager",
-		"create":         "product_manager",
-		"design":         "backend_architect",
-		"implement":      "frontend_developer",
-	}
-
 	contentLower := strings.ToLower(content)
 
+	mentions := map[string]string{
+		"@pm":       "product_manager",
+		"@backend":  "backend_architect",
+		"@frontend": "frontend_developer",
+	}
+
 	var triggeredAgent string
-	for keyword, agent := range keywords {
-		if strings.Contains(contentLower, keyword) {
+
+	for mention, agent := range mentions {
+		if strings.Contains(contentLower, mention) {
 			triggeredAgent = agent
 			break
+		}
+	}
+
+	if triggeredAgent == "" {
+		keywords := map[string]string{
+			"requirement": "product_manager",
+			"feature":     "product_manager",
+			"api":         "backend_architect",
+			"backend":     "backend_architect",
+			"database":    "backend_architect",
+			"ui":          "frontend_developer",
+			"frontend":    "frontend_developer",
+			"component":   "frontend_developer",
+			"need":        "product_manager",
+			"want":        "product_manager",
+			"build":       "product_manager",
+			"create":      "product_manager",
+			"design":      "backend_architect",
+			"implement":   "frontend_developer",
+		}
+
+		for keyword, agent := range keywords {
+			if strings.Contains(contentLower, keyword) {
+				triggeredAgent = agent
+				break
+			}
 		}
 	}
 

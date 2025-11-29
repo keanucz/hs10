@@ -6,6 +6,15 @@ const messagesArea = document.getElementById("messages");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
 
+const agents = [
+    { id: "product_manager", name: "Product Manager", trigger: "@pm" },
+    { id: "backend_architect", name: "Backend Architect", trigger: "@backend" },
+    { id: "frontend_developer", name: "Frontend Developer", trigger: "@frontend" }
+];
+
+let autocompleteVisible = false;
+let selectedAutocompleteIndex = 0;
+
 function connectWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws?projectId=${projectId}`;
@@ -65,14 +74,22 @@ function addMessage(message) {
 
     const avatarEl = document.createElement("div");
     avatarEl.className = "message-avatar";
-    avatarEl.textContent = message.senderType === "user" ? "U" : "A";
+
+    if (message.senderType === "user") {
+        avatarEl.textContent = "U";
+    } else {
+        const initials = message.senderName ? message.senderName.split(' ').map(w => w[0]).join('') : "A";
+        avatarEl.textContent = initials;
+    }
 
     const contentEl = document.createElement("div");
     contentEl.className = "message-content";
 
     const senderEl = document.createElement("div");
     senderEl.className = "message-sender";
-    senderEl.textContent = message.senderType === "user" ? window.userData.username : "Agent";
+    senderEl.textContent = message.senderType === "user"
+        ? window.userData.username
+        : (message.senderName || "Agent");
 
     const textEl = document.createElement("div");
     textEl.className = "message-text";
@@ -131,6 +148,126 @@ function sendMessage(content) {
     ws.send(JSON.stringify(message));
 }
 
+function createAutocompleteDropdown() {
+    const dropdown = document.createElement("div");
+    dropdown.id = "autocomplete-dropdown";
+    dropdown.className = "autocomplete-dropdown";
+    dropdown.style.display = "none";
+
+    agents.forEach((agent, index) => {
+        const item = document.createElement("div");
+        item.className = "autocomplete-item";
+        item.dataset.index = index;
+
+        const trigger = document.createElement("span");
+        trigger.className = "autocomplete-trigger";
+        trigger.textContent = agent.trigger;
+
+        const name = document.createElement("span");
+        name.className = "autocomplete-name";
+        name.textContent = agent.name;
+
+        item.appendChild(trigger);
+        item.appendChild(name);
+
+        item.addEventListener("click", () => {
+            selectAutocompleteItem(index);
+        });
+
+        dropdown.appendChild(item);
+    });
+
+    messageInput.parentElement.appendChild(dropdown);
+    return dropdown;
+}
+
+const autocompleteDropdown = createAutocompleteDropdown();
+
+function showAutocomplete() {
+    autocompleteVisible = true;
+    selectedAutocompleteIndex = 0;
+    autocompleteDropdown.style.display = "block";
+    updateAutocompleteSelection();
+}
+
+function hideAutocomplete() {
+    autocompleteVisible = false;
+    autocompleteDropdown.style.display = "none";
+}
+
+function updateAutocompleteSelection() {
+    const items = autocompleteDropdown.querySelectorAll(".autocomplete-item");
+    items.forEach((item, index) => {
+        if (index === selectedAutocompleteIndex) {
+            item.classList.add("selected");
+        } else {
+            item.classList.remove("selected");
+        }
+    });
+}
+
+function selectAutocompleteItem(index) {
+    const agent = agents[index];
+    const value = messageInput.value;
+    const atIndex = value.lastIndexOf("@");
+
+    if (atIndex !== -1) {
+        messageInput.value = value.substring(0, atIndex) + agent.trigger + " ";
+    } else {
+        messageInput.value = agent.trigger + " ";
+    }
+
+    hideAutocomplete();
+    messageInput.focus();
+}
+
+messageInput.addEventListener("input", (e) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtIndex !== -1) {
+        const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+
+        if (textAfterAt.length === 0 || /^[a-zA-Z]*$/.test(textAfterAt)) {
+            showAutocomplete();
+        } else {
+            hideAutocomplete();
+        }
+    } else {
+        hideAutocomplete();
+    }
+});
+
+messageInput.addEventListener("keydown", (e) => {
+    if (!autocompleteVisible) return;
+
+    if (e.key === "ArrowDown") {
+        e.preventDefault();
+        selectedAutocompleteIndex = (selectedAutocompleteIndex + 1) % agents.length;
+        updateAutocompleteSelection();
+    } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        selectedAutocompleteIndex = (selectedAutocompleteIndex - 1 + agents.length) % agents.length;
+        updateAutocompleteSelection();
+    } else if (e.key === "Enter" || e.key === "Tab") {
+        if (autocompleteVisible) {
+            e.preventDefault();
+            selectAutocompleteItem(selectedAutocompleteIndex);
+        }
+    } else if (e.key === "Escape") {
+        hideAutocomplete();
+    }
+});
+
+document.addEventListener("click", (e) => {
+    if (!messageInput.contains(e.target) && !autocompleteDropdown.contains(e.target)) {
+        hideAutocomplete();
+    }
+});
+
 messageForm.addEventListener("submit", (e) => {
     e.preventDefault();
 
@@ -139,6 +276,7 @@ messageForm.addEventListener("submit", (e) => {
 
     sendMessage(content);
     messageInput.value = "";
+    hideAutocomplete();
 });
 
 connectWebSocket();

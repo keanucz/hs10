@@ -44,13 +44,24 @@ replychat/
 
 ## Features
 
-- Real-time chat with WebSocket communication
-- Multi-user support with session management
-- AI agent keyword detection and responses
-- Task proposal and management
-- Embedded static assets (single binary deployment)
-- Graceful shutdown handling
-- Auto-reconnecting WebSocket client
+### Current (v0.1)
+
+- ✅ **Real-time chat** - WebSocket-based multi-user chat
+- ✅ **OpenAI GPT integration** - Agents powered by GPT-4o-mini
+- ✅ **@mention system** - Type `@pm`, `@backend`, `@frontend` with autocomplete
+- ✅ **3 AI agents** - Product Manager, Backend Architect, Frontend Developer
+- ✅ **Session management** - Simple email/name authentication
+- ✅ **Message persistence** - SQLite database with WAL mode
+- ✅ **Single binary** - Embedded templates and static assets
+- ✅ **Smooth scrolling** - Styled scrollbar and chat area
+
+### Coming Soon (See FUTURE-DEVELOPMENT.md)
+
+- 🔄 **Kanban board** - Visual task management
+- 🔄 **Autonomous agents** - Agents pick up and execute tasks automatically
+- 🔄 **Git integration** - Agents commit to your repository
+- 🔄 **File editing** - Agents create and modify code files
+- 🔄 **Project isolation** - Multiple workspaces
 
 ## Setup Instructions
 
@@ -119,18 +130,19 @@ CGO_ENABLED=0 go build -o replychat ./src
 - Messages are broadcast to all connected users in real-time
 - AI agents respond based on keyword detection
 
-### Agent Triggers
+### Using AI Agents
 
-The system includes three built-in agents that respond to keywords:
+**@Mention (Recommended):**
+- `@pm` - Product Manager
+- `@backend` - Backend Architect
+- `@frontend` - Frontend Developer
 
-**Product Manager:**
-- Keywords: requirement, feature, user story, scope, plan, need, want, build, create
+Type `@` to see autocomplete dropdown. Use arrow keys or click to select.
 
-**Backend Architect:**
-- Keywords: api, backend, database, server, endpoint, design
-
-**Frontend Developer:**
-- Keywords: ui, frontend, component, react, interface, implement
+**Keyword Triggers (Fallback):**
+- "requirement", "feature", "need" → Product Manager
+- "api", "backend", "database" → Backend Architect
+- "ui", "frontend", "component" → Frontend Developer
 
 ### WebSocket Protocol
 
@@ -356,18 +368,21 @@ log.SetFlags(log.LstdFlags | log.Lshortfile)
 - Monitor WebSocket connection counts
 - Implement proper error recovery and retry logic
 
-## Future Enhancements
+## Documentation
 
-- Enhanced OpenAI GPT integration with streaming responses
-- Task queue management with priority scheduling
-- Artifact creation and version control
-- User permissions and role-based access
-- Project creation and management UI
-- Agent configuration interface
-- Analytics and metrics dashboard
-- Message threading and replies
-- File upload support
-- Search functionality
+- **README.md** (this file) - Quick start and basic usage
+- **FUTURE-DEVELOPMENT.md** - Detailed roadmap for Kanban, git integration, file editing
+- **CHANGELOG.md** - Recent changes and features
+- **DEVELOPMENT.md** - Developer guide and troubleshooting
+- **OPENAI_INTEGRATION.md** - OpenAI API setup details
+- **PROJECT_SUMMARY.md** - Complete project overview
+
+## Resources
+
+- [OpenAI API](https://platform.openai.com/docs/)
+- [Gorilla WebSocket](https://github.com/gorilla/websocket)
+- [Go Templates](https://pkg.go.dev/html/template)
+- [SQLite WAL Mode](https://www.sqlite.org/wal.html)
 
 ## License
 

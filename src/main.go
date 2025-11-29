@@ -37,7 +37,21 @@ var parsedTemplates = template.Must(template.ParseFS(templateFS, "template/*.htm
 var db *sql.DB
 var globalHub *Hub
 
-var defaultAgents = []string{"product_manager", "backend_architect", "frontend_developer"}
+var defaultAgents = []string{
+	"product_manager",
+	"backend_architect",
+	"frontend_developer",
+	"qa_tester",
+	"devops_engineer",
+}
+
+var agentDisplayNames = map[string]string{
+	"product_manager":    "Product Manager",
+	"backend_architect":  "Backend Architect",
+	"frontend_developer": "Frontend Developer",
+	"qa_tester":          "QA Tester",
+	"devops_engineer":    "DevOps Engineer",
+}
 
 func currentUserID(r *http.Request) (string, error) {
 	cookie, err := r.Cookie("session_id")
@@ -72,6 +86,7 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
+	projectRef map[string]int
 }
 
 func newHub() *Hub {
@@ -83,12 +98,45 @@ func newHub() *Hub {
 	}
 }
 
+func (h *Hub) clientCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients)
+}
+
+func (h *Hub) hasClients() bool {
+	return h.clientCount() > 0
+}
+
+func (h *Hub) hasClientsFor(projectID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.projectRef != nil && h.projectRef[projectID] > 0
+}
+
+func (h *Hub) activeProjects() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if len(h.projectRef) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(h.projectRef))
+	for projectID := range h.projectRef {
+		result = append(result, projectID)
+	}
+	return result
+}
+
 func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = true
+			if h.projectRef == nil {
+				h.projectRef = make(map[string]int)
+			}
+			h.projectRef[client.projectID]++
 			h.mu.Unlock()
 			log.Printf("ws: client registered, total: %d", len(h.clients))
 
@@ -97,6 +145,13 @@ func (h *Hub) run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				if h.projectRef != nil {
+					if count := h.projectRef[client.projectID]; count > 1 {
+						h.projectRef[client.projectID] = count - 1
+					} else {
+						delete(h.projectRef, client.projectID)
+					}
+				}
 			}
 			h.mu.Unlock()
 			log.Printf("ws: client unregistered, total: %d", len(h.clients))
@@ -218,9 +273,9 @@ func handleChatMessage(c *Client, msg map[string]interface{}) {
 	timestamp := time.Now()
 
 	_, err := db.Exec(`
-		INSERT INTO messages (id, project_id, sender_id, sender_type, content, message_type, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, messageID, projectID, c.userID, "user", content, "chat", timestamp)
+		INSERT INTO messages (id, project_id, sender_id, sender_type, content, message_type, metadata, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, messageID, projectID, c.userID, "user", content, "chat", nil, timestamp)
 
 	if err != nil {
 		log.Printf("db: failed to save message: %v", err)
@@ -235,6 +290,7 @@ func handleChatMessage(c *Client, msg map[string]interface{}) {
 				"projectId":   projectID,
 				"senderId":    c.userID,
 				"senderType":  "user",
+				"senderName":  agentDisplayName(c.userID, "user"),
 				"content":     content,
 				"messageType": "chat",
 				"timestamp":   timestamp,
@@ -261,9 +317,9 @@ func sendSystemMessage(projectID, content string) {
 	timestamp := time.Now()
 
 	_, err := db.Exec(`
-		INSERT INTO messages (id, project_id, sender_id, sender_type, content, message_type, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, messageID, projectID, "system", "system", content, "system", timestamp)
+		INSERT INTO messages (id, project_id, sender_id, sender_type, content, message_type, metadata, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, messageID, projectID, "system", "system", content, "system", nil, timestamp)
 	if err != nil {
 		log.Printf("system message: failed to save: %v", err)
 		return
@@ -389,6 +445,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request, hub *Hub) {
 	}
 
 	hub.register <- client
+	pushAgentStatusUpdate(projectID)
 
 	go client.writePump()
 	go client.readPump()
@@ -665,6 +722,116 @@ func issueAPIHandler(w http.ResponseWriter, r *http.Request) {
 		deleteIssueHandler(w, r, issueID)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func messagesAPIHandler(w http.ResponseWriter, r *http.Request) {
+	projectID := r.URL.Query().Get("project_id")
+	if projectID == "" {
+		projectID = "default"
+	}
+
+	rows, err := db.Query(`
+		SELECT id, sender_id, sender_type, content, message_type, metadata, timestamp
+		FROM messages
+		WHERE project_id = ?
+		ORDER BY timestamp ASC
+		LIMIT 200
+	`, projectID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	messages := make([]map[string]interface{}, 0)
+	for rows.Next() {
+		var (
+			id, senderID, senderType, content, messageType string
+			metadataJSON                                   sql.NullString
+			timestamp                                      time.Time
+		)
+		if err := rows.Scan(&id, &senderID, &senderType, &content, &messageType, &metadataJSON, &timestamp); err != nil {
+			continue
+		}
+		message := map[string]interface{}{
+			"id":          id,
+			"projectId":   projectID,
+			"senderId":    senderID,
+			"senderType":  senderType,
+			"senderName":  agentDisplayName(senderID, senderType),
+			"content":     content,
+			"messageType": messageType,
+			"timestamp":   timestamp,
+		}
+
+		if metadata := decodeMessageMetadata(metadataJSON); metadata != nil {
+			message["metadata"] = metadata
+			if workspace := metadataString(metadata["workspacePath"]); workspace != "" {
+				message["workspacePath"] = workspace
+			}
+			if notes := metadataStringSlice(metadata["notes"]); len(notes) > 0 {
+				message["notes"] = notes
+			}
+			if plan, ok := metadata["plan"]; ok {
+				message["plan"] = plan
+			}
+			if git, ok := metadata["git"]; ok {
+				message["git"] = git
+			}
+		}
+
+		messages = append(messages, message)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"messages": messages,
+	})
+}
+
+func decodeMessageMetadata(raw sql.NullString) map[string]interface{} {
+	if !raw.Valid {
+		return nil
+	}
+	trimmed := strings.TrimSpace(raw.String)
+	if trimmed == "" {
+		return nil
+	}
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &metadata); err != nil {
+		log.Printf("messages: failed to decode metadata: %v", err)
+		return nil
+	}
+	return metadata
+}
+
+func metadataString(value interface{}) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func metadataStringSlice(value interface{}) []string {
+	switch v := value.(type) {
+	case []string:
+		return append([]string(nil), v...)
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return nil
+		}
+		return []string{v}
+	default:
+		return nil
 	}
 }
 
@@ -989,6 +1156,25 @@ func agentStatusAPIHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func agentDisplayName(senderID, senderType string) string {
+	switch senderType {
+	case "user":
+		if name := lookupUserName(senderID); name != "" {
+			return name
+		}
+		return "User"
+	case "agent":
+		if name, ok := agentDisplayNames[senderID]; ok {
+			return name
+		}
+		return "Agent"
+	case "system":
+		return "System"
+	default:
+		return senderType
+	}
+}
+
 type AgentQueueStat struct {
 	ProjectID         string `json:"project_id"`
 	AgentID           string `json:"agent_id"`
@@ -1261,7 +1447,7 @@ func deriveAgentStatus(stat *AgentQueueStat) string {
 }
 
 func broadcastAgentQueueSnapshot(hub *Hub, projectID string, stats []AgentQueueStat) {
-	if hub == nil {
+	if hub == nil || !hub.hasClientsFor(projectID) {
 		return
 	}
 
@@ -1287,7 +1473,7 @@ func broadcastAgentQueueSnapshot(hub *Hub, projectID string, stats []AgentQueueS
 }
 
 func broadcastAgentStatusSnapshot(hub *Hub, projectID string, stats []AgentQueueStat) {
-	if hub == nil {
+	if hub == nil || !hub.hasClientsFor(projectID) {
 		return
 	}
 
@@ -1313,7 +1499,7 @@ func broadcastAgentStatusSnapshot(hub *Hub, projectID string, stats []AgentQueue
 }
 
 func pushAgentStatusUpdate(projectID string) {
-	if globalHub == nil || projectID == "" {
+	if globalHub == nil || projectID == "" || !globalHub.hasClientsFor(projectID) {
 		return
 	}
 	stats, err := collectQueueStatsForProject(projectID)
@@ -1357,12 +1543,13 @@ func startQueueWorker(ctx context.Context, hub *Hub, interval time.Duration) {
 			log.Println("queue: worker shutting down")
 			return
 		case <-ticker.C:
-			projects, err := listProjectIDs()
-			if err != nil {
-				log.Printf("queue: failed to list projects: %v", err)
+			if !hub.hasClients() {
 				continue
 			}
-
+			projects := hub.activeProjects()
+			if len(projects) == 0 {
+				continue
+			}
 			for _, projectID := range projects {
 				stats, err := collectQueueStatsForProject(projectID)
 				if err != nil {
@@ -1396,7 +1583,7 @@ func startTaskProcessor(ctx context.Context, broadcast chan<- []byte, interval t
 			}
 
 			prompt := buildAgentTaskPrompt(issue)
-			agents.ProcessAgentTask(db, broadcast, issue.ProjectID, issue.AgentID, prompt)
+			agents.ProcessAgentTask(db, broadcast, issue.ProjectID, issue.AgentID, issue.ID, issue.Title, prompt)
 			broadcastIssueChange(issue.ID)
 			pushAgentStatusUpdate(issue.ProjectID)
 		}
@@ -1747,7 +1934,9 @@ func initDatabase() error {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db.SetMaxOpenConns(1)
+	// Allow a handful of concurrent readers so UI/API calls don't block each other.
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 	db.Exec(`PRAGMA journal_mode=WAL`)
 	db.Exec(`PRAGMA synchronous=NORMAL`)
 	db.Exec(`PRAGMA busy_timeout=5000`)
@@ -1918,7 +2107,10 @@ func createTables() error {
 		}
 	}
 
-	return ensureIssueColumns()
+	if err := ensureIssueColumns(); err != nil {
+		return err
+	}
+	return ensureIndexes()
 }
 
 func ensureIssueColumns() error {
@@ -1962,6 +2154,26 @@ func ensureIssueColumns() error {
 	return nil
 }
 
+func ensureIndexes() error {
+	indexes := []struct {
+		name  string
+		query string
+	}{
+		{name: "idx_messages_project_ts", query: `CREATE INDEX IF NOT EXISTS idx_messages_project_ts ON messages (project_id, timestamp)`},
+		{name: "idx_issues_project", query: `CREATE INDEX IF NOT EXISTS idx_issues_project ON issues (project_id)`},
+		{name: "idx_issues_project_status", query: `CREATE INDEX IF NOT EXISTS idx_issues_project_status ON issues (project_id, status)`},
+		{name: "idx_issues_queued_agent", query: `CREATE INDEX IF NOT EXISTS idx_issues_queued_agent ON issues (queued_agent_id)`},
+		{name: "idx_dialogs_project_status", query: `CREATE INDEX IF NOT EXISTS idx_dialogs_project_status ON dialogs (project_id, status)`},
+	}
+
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx.query); err != nil {
+			return fmt.Errorf("failed to create index %s: %w", idx.name, err)
+		}
+	}
+	return nil
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -1996,6 +2208,7 @@ func main() {
 	mux.HandleFunc("/api/projects/", projectInviteHandler)
 	mux.HandleFunc("/api/issues", issuesAPIHandler)
 	mux.HandleFunc("/api/issues/", issueAPIHandler)
+	mux.HandleFunc("/api/messages", messagesAPIHandler)
 	mux.HandleFunc("/api/dialogs", dialogsAPIHandler)
 	mux.HandleFunc("/api/dialogs/", dialogActionHandler)
 	mux.HandleFunc("/api/agent-queues", agentQueuesAPIHandler)

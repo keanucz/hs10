@@ -485,6 +485,221 @@ body {
     line-height: 1.5;
 }
 
+.message-meta {
+    display: flex;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background-color: var(--background);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.message-meta .meta-label {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.message-notes {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(148, 163, 184, 0.12);
+}
+
+.message-notes .notes-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.message-notes ul {
+    padding-left: 1.25rem;
+    margin: 0;
+    list-style: disc;
+}
+
+.message-code {
+    background-color: #151821;
+    color: #e2f1ff;
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    overflow-x: auto;
+}
+
+.message-plan {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(148, 163, 184, 0.08);
+}
+
+.message-git {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background-color: rgba(37, 99, 235, 0.08);
+    font-size: 0.85rem;
+}
+
+.message-git .git-title {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+    color: var(--text-primary);
+}
+
+.message-git .git-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    color: var(--text-primary);
+}
+
+.message-git .git-status {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.message-git .git-branch {
+    font-weight: 600;
+}
+
+.message-plan .plan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.message-plan .plan-title {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+}
+
+.plan-counts {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.plan-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background-color: rgba(37, 99, 235, 0.12);
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.message-plan .plan-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.message-code-panel {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background-color: rgba(15, 23, 42, 0.04);
+}
+
+.message-code-panel .code-panel-title {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+    color: var(--text-primary);
+}
+
+.code-panel-block {
+    margin-bottom: 0.5rem;
+}
+
+.code-panel-block:last-child {
+    margin-bottom: 0;
+}
+
+.code-panel-label {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.2rem;
+    color: var(--text-secondary);
+}
+
+.code-panel-pre {
+    margin: 0;
+    background-color: #151821;
+}
+
+.plan-section {
+    margin-top: 0.35rem;
+}
+
+.plan-section-title {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-bottom: 0.2rem;
+    color: var(--text-primary);
+}
+
+.message-plan .plan-list li {
+    list-style: none;
+}
+
+.plan-list-mutations {
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.plan-list-mutations code {
+    background-color: rgba(15, 23, 42, 0.08);
+    color: var(--text-primary);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+}
+
+.badge {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+}
+
+.badge.badge-dark {
+    background-color: var(--text-primary);
+    color: var(--surface);
+}
+
 .system-message {
     align-self: center;
     background-color: var(--surface);

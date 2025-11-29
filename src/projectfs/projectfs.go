@@ -21,7 +21,7 @@ type Settings struct {
 }
 
 func WorkspacePath(projectID string) string {
-	return filepath.Join(baseDir, projectID)
+	return filepath.Join(baseDir, projectID, "repo")
 }
 
 func EnsureWorkspace(path string) error {
@@ -35,9 +35,9 @@ func SetupProjectWorkspace(projectID, repoOption, repoURL string) (Settings, err
 	}
 
 	workspacePath := WorkspacePath(projectID)
-	parentDir := filepath.Dir(workspacePath)
-	if err := os.MkdirAll(parentDir, 0o755); err != nil {
-		return Settings{}, fmt.Errorf("failed to create parent workspace dir: %w", err)
+	projectDir := filepath.Dir(workspacePath)
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		return Settings{}, fmt.Errorf("failed to create project dir: %w", err)
 	}
 
 	switch option {
@@ -53,6 +53,9 @@ func SetupProjectWorkspace(projectID, repoOption, repoURL string) (Settings, err
 			return Settings{}, fmt.Errorf("failed to create workspace: %w", err)
 		}
 		if err := initRepo(workspacePath); err != nil {
+			return Settings{}, err
+		}
+		if err := configureRemote(workspacePath, repoURL); err != nil {
 			return Settings{}, err
 		}
 	}
@@ -116,6 +119,28 @@ func cloneRepo(repoURL, path string) error {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git clone failed: %v (%s)", err, stderr.String())
+	}
+	return nil
+}
+
+func configureRemote(path, repoURL string) error {
+	repoURL = strings.TrimSpace(repoURL)
+	if repoURL == "" {
+		return nil
+	}
+
+	cmd := exec.Command("git", "remote", "add", "origin", repoURL)
+	cmd.Dir = path
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		// remote might already exist, try set-url
+		cmd = exec.Command("git", "remote", "set-url", "origin", repoURL)
+		cmd.Dir = path
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("git remote configuration failed: %v (%s)", err, stderr.String())
+		}
 	}
 	return nil
 }

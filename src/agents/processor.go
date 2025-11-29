@@ -40,7 +40,7 @@ type AgentActionPlan struct {
 type GeneratedFile struct {
 	Path      string `json:"path"`
 	Content   string `json:"content"`
-	Overwrite bool   `json:"overwrite"`
+	Overwrite *bool  `json:"overwrite,omitempty"`
 }
 
 type FileMutation struct {
@@ -102,12 +102,12 @@ func ProcessMessage(db *sql.DB, broadcast chan<- []byte, projectID, content, use
 	processor.analyzeAndRespond(projectID, content, userID)
 }
 
-func ProcessAgentTask(db *sql.DB, broadcast chan<- []byte, projectID, agentType, content string) {
+func ProcessAgentTask(db *sql.DB, broadcast chan<- []byte, projectID, agentType, issueID, issueTitle, content string) {
 	if agentType == "" || content == "" {
 		return
 	}
 	processor := newMessageProcessor(db, broadcast)
-	go processor.generateAgentResponse(projectID, agentType, content)
+	go processor.generateAgentResponse(projectID, agentType, issueID, issueTitle, content)
 }
 
 func newMessageProcessor(db *sql.DB, broadcast chan<- []byte) *MessageProcessor {
@@ -131,12 +131,14 @@ func (p *MessageProcessor) analyzeAndRespond(projectID, content, userID string) 
 		return
 	}
 
-	go p.generateAgentResponse(projectID, agent, content)
+	go p.generateAgentResponse(projectID, agent, "", "", content)
 }
 
-func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalMessage string) {
+func (p *MessageProcessor) generateAgentResponse(projectID, agentType, issueID, issueTitle, originalMessage string) {
 	var responseText string
 	var planNotes []string
+	var planForMessage *AgentActionPlan
+	var gitResult *projectfs.CommitResult
 
 	workspacePath, workspaceErr := p.ensureWorkspace(projectID)
 	if workspaceErr != nil {
@@ -165,6 +167,20 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 	Keep responses under 200 words.
 
 	%s`, planFormatInstructions),
+
+			"qa_tester": fmt.Sprintf(`You are a QA Tester AI agent in a collaborative team workspace.
+	Your role is to validate new functionality, design automated/manual tests, and report regressions.
+	Describe the scenarios you verify, add or update test files, and share any defects you find.
+	Keep responses under 200 words.
+
+	%s`, planFormatInstructions),
+
+			"devops_engineer": fmt.Sprintf(`You are a DevOps Engineer AI agent in a collaborative team workspace.
+	Your role is to manage infrastructure, CI/CD pipelines, deployment scripts, and operational tooling.
+	Provide practical improvements, update configs/scripts, and verify commands.
+	Keep responses under 200 words.
+
+	%s`, planFormatInstructions),
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -176,7 +192,7 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 
 		if workspaceErr == nil && workspacePath != "" {
 			inputMessages = append(inputMessages, responses.ResponseInputItemParamOfMessage(
-				fmt.Sprintf("Project workspace root: %s. Only create or edit files within this directory.", workspacePath),
+				"Workspace root alias: ./ (project root). Always reference files relative to this root (e.g. src/routes/index.ts). Never mention host-specific paths under data/projects/…",
 				responses.EasyInputMessageRoleSystem,
 			))
 		}
@@ -186,7 +202,7 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 		resp, err := p.aiClient.Responses.New(ctx, responses.ResponseNewParams{
 			Model:           openai.ResponsesModel(openai.ChatModelGPT4oMini),
 			Input:           responses.ResponseNewParamsInputUnion{OfInputItemList: inputMessages},
-			MaxOutputTokens: openai.Int(300),
+			MaxOutputTokens: openai.Int(1200),
 			Temperature:     openai.Float(0.7),
 		})
 
@@ -207,6 +223,10 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 
 			if workspaceErr == nil {
 				plan, planErr := parseActionPlan(processedOutput)
+				if planErr == nil {
+					planCopy := plan
+					planForMessage = &planCopy
+				}
 				if planErr == nil && plan.HasChanges() {
 					summary, applyErr := p.applyActionPlan(workspacePath, agentType, plan)
 					if applyErr != nil {
@@ -215,6 +235,21 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 					} else {
 						responseText = summary
 						planNotes = append(planNotes, plan.Notes...)
+						commitMsg := buildCommitMessage(agentType, issueTitle, summary, planNotes)
+						if commitMsg != "" {
+							result, gitErr := projectfs.CommitWorkspaceChanges(workspacePath, commitMsg)
+							if gitErr != nil {
+								log.Printf("git: commit workflow failed for project %s: %v", projectID, gitErr)
+							}
+							if result != nil {
+								gitResult = result
+								if note := gitNote(result, gitErr); note != "" {
+									planNotes = append(planNotes, note)
+								}
+							} else if gitErr != nil {
+								planNotes = append(planNotes, fmt.Sprintf("Git commit skipped: %v", gitErr))
+							}
+						}
 					}
 				} else {
 					responseText = processedOutput
@@ -230,7 +265,13 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, originalM
 		responseText = p.getFallbackResponse(agentType)
 	}
 
-	p.sendAgentMessage(projectID, agentType, responseText, "chat", planNotes, workspacePath)
+	p.sendAgentMessage(projectID, agentType, responseText, "chat", planNotes, workspacePath, planForMessage, gitResult)
+
+	if issueID != "" {
+		if err := p.markIssueCompleted(issueID); err != nil {
+			log.Printf("agent: failed to complete issue %s: %v", issueID, err)
+		}
+	}
 
 	if strings.Contains(strings.ToLower(originalMessage), "create task") ||
 		strings.Contains(strings.ToLower(originalMessage), "add task") {
@@ -242,44 +283,189 @@ func (plan AgentActionPlan) HasChanges() bool {
 	return len(plan.Files) > 0 || len(plan.Mutations) > 0
 }
 
-func (p *MessageProcessor) sendAgentMessage(projectID, agentType, content, messageType string, notes []string, workspacePath string) {
+func (p *MessageProcessor) sendAgentMessage(projectID, agentType, content, messageType string, notes []string, workspacePath string, plan *AgentActionPlan, gitInfo *projectfs.CommitResult) {
 	messageID := uuid.New().String()
 	timestamp := time.Now()
 
+	metadata := map[string]interface{}{}
+	if workspacePath != "" {
+		metadata["workspacePath"] = workspacePath
+	}
+	if len(notes) > 0 {
+		metadata["notes"] = notes
+	}
+	planSummary := summarizePlan(plan)
+	if planSummary != nil {
+		metadata["plan"] = planSummary
+	}
+	if gitInfo != nil {
+		metadata["git"] = gitInfo
+	}
+	var metadataPayload map[string]interface{}
+	if len(metadata) > 0 {
+		metadataPayload = metadata
+	}
+
 	_, err := p.db.Exec(`
-		INSERT INTO messages (id, project_id, sender_id, sender_type, content, message_type, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, messageID, projectID, agentType, "agent", content, messageType, timestamp)
+		INSERT INTO messages (id, project_id, sender_id, sender_type, content, message_type, metadata, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, messageID, projectID, agentType, "agent", content, messageType, marshalEnvelope(metadata), timestamp)
 	if err != nil {
 		log.Printf("agent: failed to save %s message: %v", messageType, err)
 		return
 	}
 
-	payload := map[string]interface{}{
-		"message": map[string]interface{}{
-			"id":          messageID,
-			"projectId":   projectID,
-			"senderId":    agentType,
-			"senderType":  "agent",
-			"senderName":  agentDisplayNames[agentType],
-			"content":     content,
-			"messageType": messageType,
-			"timestamp":   timestamp,
-		},
+	messagePayload := map[string]interface{}{
+		"id":          messageID,
+		"projectId":   projectID,
+		"senderId":    agentType,
+		"senderType":  "agent",
+		"senderName":  agentDisplayNames[agentType],
+		"content":     content,
+		"messageType": messageType,
+		"timestamp":   timestamp,
 	}
-
-	if len(notes) > 0 {
-		payload["notes"] = notes
-	}
-
 	if workspacePath != "" {
-		payload["workspacePath"] = workspacePath
+		messagePayload["workspacePath"] = workspacePath
+	}
+	if len(notes) > 0 {
+		messagePayload["notes"] = notes
+	}
+	if planSummary != nil {
+		messagePayload["plan"] = planSummary
+	}
+	if gitInfo != nil {
+		messagePayload["git"] = gitInfo
+	}
+	if metadataPayload != nil {
+		messagePayload["metadata"] = metadataPayload
 	}
 
-	response := AgentResponse{Type: "message.received", Payload: payload}
-	if data, err := json.Marshal(response); err == nil {
+	if data := marshalEvent("message.received", map[string]interface{}{
+		"message": messagePayload,
+	}); data != nil {
 		p.broadcast <- data
 	}
+}
+
+func buildCommitMessage(agentType, issueTitle, summary string, notes []string) string {
+	candidates := []string{issueTitle}
+	if len(notes) > 0 {
+		candidates = append(candidates, notes[0])
+	}
+	candidates = append(candidates, summary)
+
+	var base string
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate != "" {
+			base = candidate
+			break
+		}
+	}
+
+	if base == "" {
+		base = "Workspace update"
+	}
+
+	base = strings.Split(base, "\n")[0]
+	if display, ok := agentDisplayNames[agentType]; ok && display != "" {
+		return fmt.Sprintf("%s: %s", display, base)
+	}
+	return base
+}
+
+func gitNote(result *projectfs.CommitResult, gitErr error) string {
+	if result == nil {
+		if gitErr != nil {
+			return fmt.Sprintf("Git commit failed: %v", gitErr)
+		}
+		return ""
+	}
+
+	short := shortSHA(result.CommitID)
+	branch := strings.TrimSpace(result.Branch)
+	if branch == "" {
+		branch = "HEAD"
+	}
+
+	var status string
+	switch {
+	case result.Pushed:
+		status = fmt.Sprintf("pushed to origin/%s", branch)
+	case strings.TrimSpace(result.Remote) != "":
+		status = fmt.Sprintf("recorded on %s (push pending)", branch)
+	default:
+		status = fmt.Sprintf("recorded on %s (no remote)", branch)
+	}
+
+	if gitErr != nil {
+		status += fmt.Sprintf("; push error: %v", gitErr)
+	}
+
+	return fmt.Sprintf("Git commit %s %s", short, status)
+}
+
+func shortSHA(commit string) string {
+	commit = strings.TrimSpace(commit)
+	if commit == "" {
+		return "unknown"
+	}
+	runes := []rune(commit)
+	if len(runes) > 7 {
+		return string(runes[:7])
+	}
+	return commit
+}
+
+func summarizePlan(plan *AgentActionPlan) map[string]interface{} {
+	if plan == nil {
+		return nil
+	}
+
+	files := make([]string, 0, len(plan.Files))
+	for _, file := range plan.Files {
+		if file.Path != "" {
+			files = append(files, file.Path)
+		}
+	}
+
+	mutations := make([]string, 0, len(plan.Mutations))
+	for _, mutation := range plan.Mutations {
+		if mutation.Path != "" {
+			mutations = append(mutations, mutation.Path)
+		}
+	}
+
+	if len(files) == 0 && len(mutations) == 0 {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"files":     files,
+		"mutations": mutations,
+	}
+}
+
+func marshalEnvelope(data map[string]interface{}) string {
+	if len(data) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func marshalEvent(eventType string, payload map[string]interface{}) []byte {
+	event := AgentResponse{Type: eventType, Payload: payload}
+	data, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("event: failed to marshal %s: %v", eventType, err)
+		return nil
+	}
+	return data
 }
 
 func (p *MessageProcessor) ensureWorkspace(projectID string) (string, error) {
@@ -311,12 +497,15 @@ func (p *MessageProcessor) applyActionPlan(workspacePath, agentType string, plan
 	filesWritten := 0
 	mutationsApplied := 0
 
-	for _, file := range plan.Files {
-		if file.Path == "" {
+	for i := range plan.Files {
+		file := plan.Files[i]
+		cleanPath := normalizePlanPath(workspacePath, file.Path)
+		if cleanPath == "" {
 			continue
 		}
+		plan.Files[i].Path = cleanPath
 
-		absPath, err := secureJoin(workspacePath, file.Path)
+		absPath, err := secureJoin(workspacePath, cleanPath)
 		if err != nil {
 			return "", err
 		}
@@ -325,7 +514,11 @@ func (p *MessageProcessor) applyActionPlan(workspacePath, agentType string, plan
 			return "", fmt.Errorf("failed to prepare directory for %s: %w", file.Path, err)
 		}
 
-		if !file.Overwrite {
+		overwrite := true
+		if file.Overwrite != nil {
+			overwrite = *file.Overwrite
+		}
+		if !overwrite {
 			if _, err := os.Stat(absPath); err == nil {
 				continue
 			}
@@ -337,12 +530,19 @@ func (p *MessageProcessor) applyActionPlan(workspacePath, agentType string, plan
 		filesWritten++
 	}
 
-	for _, mutation := range plan.Mutations {
+	for i := range plan.Mutations {
+		mutation := plan.Mutations[i]
 		if mutation.Path == "" || mutation.Find == "" {
 			continue
 		}
 
-		absPath, err := secureJoin(workspacePath, mutation.Path)
+		cleanPath := normalizePlanPath(workspacePath, mutation.Path)
+		if cleanPath == "" {
+			continue
+		}
+		plan.Mutations[i].Path = cleanPath
+
+		absPath, err := secureJoin(workspacePath, cleanPath)
 		if err != nil {
 			return "", err
 		}
@@ -364,7 +564,11 @@ func (p *MessageProcessor) applyActionPlan(workspacePath, agentType string, plan
 		mutationsApplied++
 	}
 
-	summary := fmt.Sprintf("%s updated workspace %s (files=%d, mutations=%d)", agentType, workspacePath, filesWritten, mutationsApplied)
+	agentName := agentDisplayNames[agentType]
+	if agentName == "" {
+		agentName = agentType
+	}
+	summary := fmt.Sprintf("%s updated workspace (files=%d, mutations=%d)", agentName, filesWritten, mutationsApplied)
 	if len(plan.Notes) > 0 {
 		summary = summary + "; notes: " + strings.Join(plan.Notes, "; ")
 	}
@@ -381,6 +585,36 @@ func secureJoin(basePath, relative string) (string, error) {
 		return "", fmt.Errorf("path %s escapes workspace", relative)
 	}
 	return joined, nil
+}
+
+func normalizePlanPath(workspacePath, candidate string) string {
+	p := strings.TrimSpace(candidate)
+	if p == "" {
+		return ""
+	}
+
+	cleanWorkspace := filepath.Clean(workspacePath)
+	cleanCandidate := filepath.Clean(p)
+
+	if strings.HasPrefix(cleanCandidate, cleanWorkspace) {
+		if rel, err := filepath.Rel(cleanWorkspace, cleanCandidate); err == nil && rel != "" {
+			return rel
+		}
+	}
+
+	baseSegment := filepath.Base(cleanWorkspace)
+	if baseSegment != "" {
+		marker := string(os.PathSeparator) + baseSegment + string(os.PathSeparator)
+		if idx := strings.Index(cleanCandidate, marker); idx >= 0 {
+			trimmed := cleanCandidate[idx+len(marker):]
+			if trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+
+	cleanCandidate = strings.TrimPrefix(cleanCandidate, string(os.PathSeparator))
+	return cleanCandidate
 }
 
 func parseActionPlan(output string) (AgentActionPlan, error) {
@@ -435,6 +669,9 @@ func (p *MessageProcessor) handleIssueBlock(projectID, agentType string, fields 
 	priority := normalizePriority(fields["priority"])
 	tags := strings.Join(splitCSV(fields["tags"]), ",")
 	assigneeID := normalizeAgentIdentifier(fields["assignee"])
+	if assigneeID == "" {
+		assigneeID = agentType
+	}
 
 	var assigned interface{}
 	if assigneeID != "" {
@@ -444,11 +681,15 @@ func (p *MessageProcessor) handleIssueBlock(projectID, agentType string, fields 
 	issueID := uuid.New().String()
 	now := time.Now()
 
+	queueTarget := assigned
+	if queueTarget == nil {
+		queueTarget = agentType
+	}
 	_, err := p.db.Exec(`
 		INSERT INTO issues (id, project_id, title, description, priority, status,
 		                   created_by, created_by_type, assigned_agent_id, queued_agent_id, queued_at, tags, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-	`, issueID, projectID, title, description, priority, "proposed", agentType, "agent", assigned, tags, now)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, issueID, projectID, title, description, priority, "todo", agentType, "agent", assigned, queueTarget, now, tags, now)
 	if err != nil {
 		return "", err
 	}
@@ -459,22 +700,15 @@ func (p *MessageProcessor) handleIssueBlock(projectID, agentType string, fields 
 		"title":       title,
 		"description": description,
 		"priority":    priority,
-		"status":      "proposed",
+		"status":      "todo",
 		"createdBy":   agentType,
 		"assignee":    assigneeID,
 	}
 
-	response := AgentResponse{
-		Type: "issue.created",
-		Payload: map[string]interface{}{
-			"issue":            issuePayload,
-			"requiresApproval": true,
-		},
-	}
-
-	if data, err := json.Marshal(response); err == nil {
-		p.broadcast <- data
-	}
+	p.broadcast <- marshalEvent("issue.created", map[string]interface{}{
+		"issue":            issuePayload,
+		"requiresApproval": false,
+	})
 
 	return fmt.Sprintf("Created issue: %s", title), nil
 }
@@ -489,8 +723,78 @@ func (p *MessageProcessor) handleMentionBlock(projectID, agentType string, field
 		target = "team"
 	}
 	content := fmt.Sprintf("@mention to %s: %s", target, message)
-	p.sendAgentMessage(projectID, agentType, content, "system", nil, "")
+	p.sendAgentMessage(projectID, agentType, content, "system", nil, "", nil, nil)
 	return fmt.Sprintf("Mentioned %s", target)
+}
+
+func (p *MessageProcessor) markIssueCompleted(issueID string) error {
+	now := time.Now()
+	res, err := p.db.Exec(`
+		UPDATE issues
+		SET status = 'done',
+		    completed_at = COALESCE(completed_at, ?),
+		    queued_agent_id = NULL
+		WHERE id = ? AND status != 'done'
+	`, now, issueID)
+	if err != nil {
+		return err
+	}
+
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return nil
+	}
+
+	issue, err := fetchIssueForBroadcast(p.db, issueID)
+	if err != nil {
+		return err
+	}
+
+	if data := marshalEvent("issue.updated", map[string]interface{}{
+		"issue": issue,
+	}); data != nil {
+		p.broadcast <- data
+	}
+
+	return nil
+}
+
+func fetchIssueForBroadcast(db *sql.DB, issueID string) (map[string]interface{}, error) {
+	row := db.QueryRow(`
+		SELECT id, project_id, title, description, priority, status,
+		       created_by, created_by_type, assigned_agent_id, queued_agent_id,
+		       queued_at, started_at, completed_at, created_at
+		FROM issues
+		WHERE id = ?
+	`, issueID)
+
+	var (
+		id, projectID, title, description, priority, status, createdBy, createdByType string
+		assignedAgentID, queuedAgentID                                                sql.NullString
+		queuedAt, startedAt, completedAt, createdAt                                   sql.NullTime
+	)
+
+	if err := row.Scan(&id, &projectID, &title, &description, &priority, &status,
+		&createdBy, &createdByType, &assignedAgentID, &queuedAgentID,
+		&queuedAt, &startedAt, &completedAt, &createdAt); err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"id":              id,
+		"projectId":       projectID,
+		"title":           title,
+		"description":     description,
+		"priority":        priority,
+		"status":          status,
+		"createdBy":       createdBy,
+		"createdByType":   createdByType,
+		"assignedAgentId": assignedAgentID.String,
+		"queuedAgentId":   queuedAgentID.String,
+		"queuedAt":        queuedAt.Time,
+		"startedAt":       startedAt.Time,
+		"completedAt":     completedAt.Time,
+		"createdAt":       createdAt.Time,
+	}, nil
 }
 
 func (p *MessageProcessor) handleDialogBlock(projectID, agentType string, fields map[string]string) string {
@@ -519,15 +823,10 @@ func (p *MessageProcessor) handleDialogBlock(projectID, agentType string, fields
 		"issueId":       issueID,
 	}
 
-	response := AgentResponse{
-		Type: "dialog.requested",
-		Payload: map[string]interface{}{
-			"dialog":  dialog,
-			"agentId": agentType,
-		},
-	}
-
-	if data, err := json.Marshal(response); err == nil {
+	if data := marshalEvent("dialog.requested", map[string]interface{}{
+		"dialog":  dialog,
+		"agentId": agentType,
+	}); data != nil {
 		p.broadcast <- data
 	}
 
@@ -631,6 +930,10 @@ func normalizeAgentIdentifier(value string) string {
 		return "backend_architect"
 	case "frontend", "frontend_developer", "frontenddeveloper", "fd":
 		return "frontend_developer"
+	case "qa", "tester", "qa_tester", "qatester":
+		return "qa_tester"
+	case "devops", "devops_engineer", "devopsengineer", "sre":
+		return "devops_engineer"
 	default:
 		return ""
 	}
@@ -659,6 +962,20 @@ I'll focus on:
 - Ensuring good UX patterns
 
 Let me know if you'd like me to start on any specific part.`,
+
+		"qa_tester": `I can validate the functionality we just discussed.
+
+I'll prepare or update test cases, run the relevant suites, and report any regressions I find.
+Let me know if there are specific scenarios or environments I should focus on.`,
+
+		"devops_engineer": `I can help with the infrastructure and delivery pipeline for this work.
+
+I’m thinking:
+- Update CI/CD or deployment scripts
+- Adjust infrastructure-as-code templates
+- Verify monitoring or rollout steps
+
+Would you like me to start on any particular environment or pipeline stage?`,
 	}
 
 	if response, ok := responses[agentType]; ok {
@@ -677,12 +994,16 @@ func (p *MessageProcessor) proposeTask(projectID, agentType string) {
 		"product_manager":    "Define user requirements and acceptance criteria",
 		"backend_architect":  "Design API endpoints and database schema",
 		"frontend_developer": "Create responsive UI components",
+		"qa_tester":          "Validate latest feature and regression suite",
+		"devops_engineer":    "Improve deployment pipeline and infrastructure",
 	}
 
 	taskDescriptions := map[string]string{
 		"product_manager":    "Gather and document user requirements, create user stories with clear acceptance criteria",
 		"backend_architect":  "Design RESTful API structure and database schema with proper relationships",
 		"frontend_developer": "Build reusable React components with responsive design and accessibility",
+		"qa_tester":          "Design automated/manual tests for new features, run regression suites, and report issues",
+		"devops_engineer":    "Update CI/CD configuration, infrastructure-as-code, or deployment scripts to support new changes",
 	}
 
 	_, err := p.db.Exec(`
@@ -696,22 +1017,18 @@ func (p *MessageProcessor) proposeTask(projectID, agentType string) {
 		return
 	}
 
-	response := AgentResponse{
-		Type: "issue.created",
-		Payload: map[string]interface{}{
-			"issue": map[string]interface{}{
-				"id":          taskID,
-				"projectId":   projectID,
-				"title":       taskTitles[agentType],
-				"description": taskDescriptions[agentType],
-				"priority":    "medium",
-				"status":      "proposed",
-				"createdBy":   agentType,
-			},
-			"requiresApproval": true,
+	if data := marshalEvent("issue.created", map[string]interface{}{
+		"issue": map[string]interface{}{
+			"id":          taskID,
+			"projectId":   projectID,
+			"title":       taskTitles[agentType],
+			"description": taskDescriptions[agentType],
+			"priority":    "medium",
+			"status":      "proposed",
+			"createdBy":   agentType,
 		},
+		"requiresApproval": true,
+	}); data != nil {
+		p.broadcast <- data
 	}
-
-	responseJSON, _ := json.Marshal(response)
-	p.broadcast <- responseJSON
 }

@@ -18,6 +18,8 @@ var mentionTriggers = []mentionTrigger{
 	{token: "@pm", agent: "product_manager"},
 	{token: "@backend", agent: "backend_architect"},
 	{token: "@frontend", agent: "frontend_developer"},
+	{token: "@qa", agent: "qa_tester"},
+	{token: "@devops", agent: "devops_engineer"},
 }
 
 var keywordRules = []keywordRule{
@@ -38,6 +40,23 @@ var keywordRules = []keywordRule{
 	{keyword: "component", agent: "frontend_developer", priority: 80},
 	{keyword: "interface", agent: "frontend_developer", priority: 75},
 	{keyword: "implement", agent: "frontend_developer", priority: 60},
+
+	// QA tester cues.
+	{keyword: "test", agent: "qa_tester", priority: 85},
+	{keyword: "qa", agent: "qa_tester", priority: 85, wordOnly: true},
+	{keyword: "verify", agent: "qa_tester", priority: 70},
+	{keyword: "bug", agent: "qa_tester", priority: 65},
+	{keyword: "regression", agent: "qa_tester", priority: 65},
+	{keyword: "automated", agent: "qa_tester", priority: 60},
+
+	// DevOps cues.
+	{keyword: "deploy", agent: "devops_engineer", priority: 90},
+	{keyword: "deployment", agent: "devops_engineer", priority: 90},
+	{keyword: "infrastructure", agent: "devops_engineer", priority: 85},
+	{keyword: "pipeline", agent: "devops_engineer", priority: 80},
+	{keyword: "ci", agent: "devops_engineer", priority: 75, wordOnly: true},
+	{keyword: "cd", agent: "devops_engineer", priority: 75, wordOnly: true},
+	{keyword: "docker", agent: "devops_engineer", priority: 70},
 
 	// Product management keywords are intentionally lower priority.
 	{keyword: "requirement", agent: "product_manager", priority: 60},

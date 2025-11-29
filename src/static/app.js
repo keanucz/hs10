@@ -7,6 +7,7 @@ let projectId = "default";
 const agentCardMap = {};
 const dialogCards = {};
 let dialogOverlay = null;
+const seenMessageIds = new Set();
 
 const messagesArea = document.getElementById("messages");
 const messageForm = document.getElementById("message-form");
@@ -15,7 +16,9 @@ const messageInput = document.getElementById("message-input");
 const agents = [
     { id: "product_manager", name: "Product Manager", trigger: "@pm" },
     { id: "backend_architect", name: "Backend Architect", trigger: "@backend" },
-    { id: "frontend_developer", name: "Frontend Developer", trigger: "@frontend" }
+    { id: "frontend_developer", name: "Frontend Developer", trigger: "@frontend" },
+    { id: "qa_tester", name: "QA Tester", trigger: "@qa" },
+    { id: "devops_engineer", name: "DevOps Engineer", trigger: "@devops" }
 ];
 
 let autocompleteVisible = false;
@@ -115,6 +118,13 @@ function handleWebSocketMessage(data) {
 }
 
 function addMessage(message) {
+    renderMessage(message, true);
+}
+
+function renderMessage(message, scrollToBottom) {
+    if (!message || seenMessageIds.has(message.id)) {
+        return;
+    }
     const messageEl = document.createElement("div");
     messageEl.className = `message ${message.senderType}`;
 
@@ -124,7 +134,8 @@ function addMessage(message) {
     if (message.senderType === "user") {
         avatarEl.textContent = "U";
     } else {
-        const initials = message.senderName ? message.senderName.split(' ').map(w => w[0]).join('') : "A";
+        const name = message.senderName || formatAgentName(message.senderId);
+        const initials = name ? name.split(' ').map(w => w[0]).join('') : "A";
         avatarEl.textContent = initials;
     }
 
@@ -133,13 +144,15 @@ function addMessage(message) {
 
     const senderEl = document.createElement("div");
     senderEl.className = "message-sender";
-    senderEl.textContent = message.senderType === "user"
-        ? window.userData.username
-        : (message.senderName || "Agent");
+    if (message.senderType === "user") {
+        senderEl.textContent = message.senderName || window.userData.username;
+    } else {
+        senderEl.textContent = message.senderName || formatAgentName(message.senderId);
+    }
 
     const textEl = document.createElement("div");
     textEl.className = "message-text";
-    textEl.textContent = message.content;
+    textEl.innerHTML = formatMessageContent(message);
 
     contentEl.appendChild(senderEl);
     contentEl.appendChild(textEl);
@@ -148,7 +161,10 @@ function addMessage(message) {
     messageEl.appendChild(contentEl);
 
     messagesArea.appendChild(messageEl);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+    if (scrollToBottom) {
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+    seenMessageIds.add(message.id);
 }
 
 function addSystemMessage(text) {
@@ -161,6 +177,386 @@ function addSystemMessage(text) {
     messageEl.appendChild(textEl);
     messagesArea.appendChild(messageEl);
     messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+function resolveWorkspacePath(message) {
+    const raw = (message.workspacePath || message.metadata?.workspacePath || "").trim();
+    if (!raw) {
+        return "";
+    }
+    return formatWorkspaceLabel(raw, message.projectId);
+}
+
+function formatWorkspaceLabel(rawPath, projectId) {
+    const normalized = rawPath.replace(/\\/g, "/");
+    const match = normalized.match(/data\/projects\/([^/]+)(\/.*)?$/);
+    if (match) {
+        const projectSegment = match[1].slice(0, 8);
+        const suffix = (match[2] || "").replace(/^\/+/, "");
+        if (suffix) {
+            return `workspace:${projectSegment}/${suffix}`;
+        }
+        return `workspace:${projectSegment}`;
+    }
+    if (projectId) {
+        return `workspace:${projectId}`;
+    }
+    return normalized;
+}
+
+function extractMessageNotes(message) {
+    return normalizeNotes(message.notes || message.metadata?.notes);
+}
+
+function normalizeNotes(rawValue) {
+    if (!rawValue) {
+        return [];
+    }
+    if (typeof rawValue === "string") {
+        const trimmed = rawValue.trim();
+        return trimmed ? [trimmed] : [];
+    }
+    if (Array.isArray(rawValue)) {
+        return rawValue
+            .map((note) => (typeof note === "string" ? note.trim() : ""))
+            .filter(Boolean);
+    }
+    return [];
+}
+
+function normalizePathList(items) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+    return items
+        .map((item) => {
+            if (typeof item === "string") {
+                return item.trim();
+            }
+            if (item && typeof item === "object") {
+                return (item.path || item.file || "").trim();
+            }
+            return "";
+        })
+        .filter(Boolean);
+}
+
+function extractPlanSummary(message) {
+    const planSource = message.metadata?.plan || message.plan || {};
+    return {
+        files: normalizePathList(planSource.files || []),
+        mutations: normalizePathList(planSource.mutations || []),
+    };
+}
+
+function parsePlanFromContent(content) {
+    const trimmed = (content || "").trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    let target = trimmed;
+    if (!looksLikeJson(trimmed)) {
+        if (!(trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+            return null;
+        }
+    }
+
+    try {
+        const parsed = JSON.parse(target);
+        if (!parsed || typeof parsed !== "object") {
+            return null;
+        }
+        const files = normalizePathList(parsed.files || []);
+        const mutations = normalizePathList(parsed.mutations || []);
+        const notes = normalizeNotes(parsed.notes);
+        if (!files.length && !mutations.length && !notes.length) {
+            return null;
+        }
+        return { files, mutations, notes, consumed: true };
+    } catch (err) {
+        return null;
+    }
+}
+
+function dedupeStrings(values) {
+    const seen = new Set();
+    const result = [];
+    values.forEach((value) => {
+        const trimmed = (value || "").trim();
+        if (!trimmed) {
+            return;
+        }
+        const key = trimmed.toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            result.push(trimmed);
+        }
+    });
+    return result;
+}
+
+function extractGitInfo(message) {
+    const git = message.git || message.metadata?.git;
+    if (!git || typeof git !== "object") {
+        return null;
+    }
+    return git;
+}
+
+function shortCommit(commitId) {
+    const value = (commitId || "").trim();
+    if (!value) {
+        return "unknown";
+    }
+    return value.length > 7 ? value.slice(0, 7) : value;
+}
+
+function renderGitSummary(gitInfo) {
+    const commitLabel = shortCommit(gitInfo.commitId || "");
+    const branch = gitInfo.branch || "HEAD";
+    let status;
+    if (gitInfo.pushed) {
+        status = `Pushed to origin/${escapeHtml(branch)}`;
+    } else if ((gitInfo.remote || "").trim()) {
+        status = `Commit on ${escapeHtml(branch)} (push pending)`;
+    } else {
+        status = `Commit on ${escapeHtml(branch)} (no remote)`;
+    }
+
+    return `
+        <div class="message-git">
+            <div class="git-title">Git</div>
+            <div class="git-row">
+                <span class="badge badge-dark">${escapeHtml(commitLabel)}</span>
+                <span class="git-branch">@ ${escapeHtml(branch)}</span>
+                <span class="git-status">${status}</span>
+            </div>
+        </div>
+    `;
+}
+
+function renderPlanSummary(summary) {
+    const hasFiles = summary.files.length > 0;
+    const hasMutations = summary.mutations.length > 0;
+    if (!hasFiles && !hasMutations) {
+        return "";
+    }
+
+    const counts = [];
+    if (hasFiles) {
+        counts.push(`${summary.files.length} file${summary.files.length === 1 ? "" : "s"}`);
+    }
+    if (hasMutations) {
+        counts.push(`${summary.mutations.length} mutation${summary.mutations.length === 1 ? "" : "s"}`);
+    }
+
+    const sections = [];
+    if (hasFiles) {
+        const list = summary.files
+            .map((file) => `<li><span class="badge">${escapeHtml(file)}</span></li>`)
+            .join("");
+        sections.push(`
+            <div class="plan-section">
+                <div class="plan-section-title">Files</div>
+                <ul class="plan-list plan-list-chips">${list}</ul>
+            </div>
+        `);
+    }
+
+    if (hasMutations) {
+        const list = summary.mutations
+            .map((mutation) => `<li><code>${escapeHtml(mutation)}</code></li>`)
+            .join("");
+        sections.push(`
+            <div class="plan-section">
+                <div class="plan-section-title">Mutations</div>
+                <ul class="plan-list plan-list-mutations">${list}</ul>
+            </div>
+        `);
+    }
+
+    const countBadges = counts
+        .map((label) => `<span class="plan-count">${escapeHtml(label)}</span>`)
+        .join("");
+
+    return `
+        <div class="message-plan">
+            <div class="plan-header">
+                <div class="plan-title">Workspace Update</div>
+                <div class="plan-counts">${countBadges}</div>
+            </div>
+            ${sections.join("")}
+        </div>
+    `;
+}
+
+function parseWorkspaceSummary(content) {
+    if (!content) {
+        return null;
+    }
+    const match = content.match(
+        /^.+?\s+updated\s+workspace\s+.+?\s+\(files=\d+,\s*mutations=\d+\)(?:;\s*notes:\s*(.+))?$/i
+    );
+    if (!match) {
+        return null;
+    }
+    const notesPart = match[1] ? match[1].trim() : "";
+    return {
+        notes: notesPart ? normalizeNotes(notesPart) : [],
+    };
+}
+
+function extractCodeBlocks(text) {
+    const blocks = [];
+    if (!text) {
+        return { blocks, remainder: "" };
+    }
+
+    const pattern = /```([\w.-]+)?\n([\s\S]*?)```/g;
+    let match;
+    let lastIndex = 0;
+    const remainderPieces = [];
+
+    while ((match = pattern.exec(text)) !== null) {
+        const before = text.slice(lastIndex, match.index);
+        if (before.trim()) {
+            remainderPieces.push(before.trim());
+        }
+        blocks.push({
+            language: (match[1] || "").trim(),
+            code: (match[2] || "").trim(),
+        });
+        lastIndex = pattern.lastIndex;
+    }
+
+    const after = text.slice(lastIndex);
+    if (after.trim()) {
+        remainderPieces.push(after.trim());
+    }
+
+    const remainder = remainderPieces.join("\n\n");
+    return { blocks, remainder };
+}
+
+function renderCodeBlocks(blocks) {
+    if (!blocks.length) {
+        return "";
+    }
+    const items = blocks
+        .map(
+            (block) => `
+        <div class="code-panel-block">
+            <div class="code-panel-label">${block.language ? escapeHtml(block.language) : "Code"}</div>
+            <pre class="message-code code-panel-pre">${escapeHtml(block.code)}</pre>
+        </div>
+    `
+        )
+        .join("");
+
+    return `
+        <div class="message-code-panel">
+            <div class="code-panel-title">Code Snippets</div>
+            ${items}
+        </div>
+    `;
+}
+
+function formatMessageContent(message) {
+    const segments = [];
+    const workspacePath = resolveWorkspacePath(message);
+    let planSummary = extractPlanSummary(message);
+    const rawContent = (message.content || "").trim();
+    const planFromContent = parsePlanFromContent(rawContent);
+    const summaryInfo = parseWorkspaceSummary(rawContent);
+    const notes = dedupeStrings([
+        ...extractMessageNotes(message),
+        ...(planFromContent?.notes || []),
+        ...(summaryInfo?.notes || []),
+    ]);
+    const gitInfo = extractGitInfo(message);
+    const { blocks: codeBlocks, remainder: strippedContent } = extractCodeBlocks(rawContent);
+
+    if ((!planSummary.files.length && !planSummary.mutations.length) && planFromContent) {
+        planSummary = {
+            files: planFromContent.files,
+            mutations: planFromContent.mutations,
+        };
+    }
+
+    if (workspacePath) {
+        segments.push(`
+            <div class="message-meta">
+                <span class="meta-label">Workspace</span>
+                <span class="meta-value">${escapeHtml(workspacePath)}</span>
+            </div>
+        `);
+    }
+
+    const planMarkup = renderPlanSummary(planSummary);
+    if (planMarkup) {
+        segments.push(planMarkup);
+    }
+
+    if (gitInfo) {
+        segments.push(renderGitSummary(gitInfo));
+    }
+
+    const shouldRenderContent =
+        strippedContent &&
+        !(planFromContent && planFromContent.consumed) &&
+        !summaryInfo &&
+        strippedContent !== "";
+    if (shouldRenderContent) {
+        segments.push(renderPrimaryContent(strippedContent));
+    }
+
+    if (codeBlocks.length) {
+        segments.push(renderCodeBlocks(codeBlocks));
+    }
+
+    if (notes.length) {
+        const listItems = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+        segments.push(`
+            <div class="message-notes">
+                <div class="notes-title">Notes</div>
+                <ul>${listItems}</ul>
+            </div>
+        `);
+    }
+
+    return segments.join("");
+}
+
+function renderPrimaryContent(text) {
+    if (looksLikeJson(text)) {
+        try {
+            const parsed = JSON.parse(text);
+            const formatted = JSON.stringify(parsed, null, 2);
+            return `<pre class="message-code">${escapeHtml(formatted)}</pre>`;
+        } catch (err) {
+            // fall through to plain text
+        }
+    }
+    return `<p>${escapeHtml(text)}</p>`;
+}
+
+function looksLikeJson(text) {
+    const first = text[0];
+    const last = text[text.length - 1];
+    return (
+        (first === "{" && last === "}") ||
+        (first === "[" && last === "]")
+    );
+}
+
+function escapeHtml(raw) {
+    return raw
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }
 
 function updateAgentStatus(data) {
@@ -346,7 +742,9 @@ function formatAgentName(agentId) {
     const map = {
         "product_manager": "Product Manager",
         "backend_architect": "Backend Architect",
-        "frontend_developer": "Frontend Developer"
+        "frontend_developer": "Frontend Developer",
+        "qa_tester": "QA Tester",
+        "devops_engineer": "DevOps Engineer"
     };
     return map[agentId] || agentId || "Agent";
 }
@@ -368,6 +766,24 @@ async function fetchAgentQueues() {
         });
     } catch (err) {
         console.error("Failed to load agent queues", err);
+    }
+}
+
+async function fetchMessages() {
+    if (!projectId) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/messages?project_id=${projectId}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        (data.messages || []).forEach((msg) => renderMessage(msg, false));
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    } catch (err) {
+        console.error("Failed to load messages", err);
     }
 }
 
@@ -594,6 +1010,7 @@ if (window.userData && window.userData.projectId) {
 initAgentCards();
 initDialogUI();
 connectWebSocket();
+fetchMessages();
 fetchDialogs();
 fetchAgentQueues();
 fetchAgentStatus();

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"replychat/src/agents"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -263,13 +264,32 @@ func projectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	projectID := r.URL.Query().Get("id")
+	if projectID == "" {
+		http.Redirect(w, r, "/projects", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var memberID string
+	err = db.QueryRow(`
+		SELECT id FROM project_members WHERE project_id = ? AND user_id = ?
+	`, projectID, userID).Scan(&memberID)
+	if err != nil {
+		http.Redirect(w, r, "/projects", http.StatusTemporaryRedirect)
+		return
+	}
+
 	var username, email string
+	var projectName string
 	db.QueryRow(`SELECT name, email FROM users WHERE id = ?`, userID).Scan(&username, &email)
+	db.QueryRow(`SELECT name FROM projects WHERE id = ?`, projectID).Scan(&projectName)
 
 	data := map[string]interface{}{
-		"Username": username,
-		"Email":    email,
-		"UserID":   userID,
+		"Username":    username,
+		"Email":       email,
+		"UserID":      userID,
+		"ProjectID":   projectID,
+		"ProjectName": projectName,
 	}
 
 	renderTemplate(w, "project.html", data)
@@ -369,7 +389,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   86400 * 7,
 	})
 
-	http.Redirect(w, r, "/project", http.StatusSeeOther)
+	http.Redirect(w, r, "/projects", http.StatusSeeOther)
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
@@ -386,6 +406,502 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func kanbanHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var userID string
+	err = db.QueryRow(`SELECT user_id FROM sessions WHERE id = ?`, cookie.Value).Scan(&userID)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	projectID := r.URL.Query().Get("id")
+	if projectID == "" {
+		http.Redirect(w, r, "/projects", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var memberID string
+	err = db.QueryRow(`
+		SELECT id FROM project_members WHERE project_id = ? AND user_id = ?
+	`, projectID, userID).Scan(&memberID)
+	if err != nil {
+		http.Redirect(w, r, "/projects", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var username, email string
+	var projectName string
+	db.QueryRow(`SELECT name, email FROM users WHERE id = ?`, userID).Scan(&username, &email)
+	db.QueryRow(`SELECT name FROM projects WHERE id = ?`, projectID).Scan(&projectName)
+
+	data := map[string]interface{}{
+		"Username":    username,
+		"Email":       email,
+		"UserID":      userID,
+		"ProjectID":   projectID,
+		"ProjectName": projectName,
+	}
+
+	renderTemplate(w, "kanban.html", data)
+}
+
+func issuesAPIHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		listIssuesHandler(w, r)
+	case http.MethodPost:
+		createIssueHandler(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func listIssuesHandler(w http.ResponseWriter, r *http.Request) {
+	projectID := r.URL.Query().Get("project_id")
+	if projectID == "" {
+		projectID = "default"
+	}
+
+	rows, err := db.Query(`
+		SELECT id, title, description, priority, status,
+		       created_by, created_by_type, assigned_agent_id,
+		       queued_at, started_at, completed_at
+		FROM issues
+		WHERE project_id = ?
+		ORDER BY
+			CASE priority
+				WHEN 'urgent' THEN 0
+				WHEN 'high' THEN 1
+				WHEN 'medium' THEN 2
+				WHEN 'low' THEN 3
+			END,
+			queued_at DESC
+	`, projectID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	issues := make([]map[string]interface{}, 0)
+	for rows.Next() {
+		var id, title, description, priority, status, createdBy, createdByType string
+		var assignedAgentID sql.NullString
+		var queuedAt, startedAt, completedAt sql.NullTime
+
+		rows.Scan(&id, &title, &description, &priority, &status, &createdBy, &createdByType,
+			&assignedAgentID, &queuedAt, &startedAt, &completedAt)
+
+		issue := map[string]interface{}{
+			"id":                id,
+			"title":             title,
+			"description":       description,
+			"priority":          priority,
+			"status":            status,
+			"created_by":        createdBy,
+			"created_by_type":   createdByType,
+			"assigned_agent_id": assignedAgentID.String,
+			"queued_at":         queuedAt.Time,
+			"started_at":        startedAt.Time,
+			"completed_at":      completedAt.Time,
+		}
+		issues = append(issues, issue)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"issues": issues,
+	})
+}
+
+func createIssueHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProjectID       string `json:"project_id"`
+		Title           string `json:"title"`
+		Description     string `json:"description"`
+		Priority        string `json:"priority"`
+		Status          string `json:"status"`
+		AssignedAgentID string `json:"assigned_agent_id"`
+		CreatedBy       string `json:"created_by"`
+		CreatedByType   string `json:"created_by_type"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	issueID := uuid.New().String()
+	timestamp := time.Now()
+
+	var assignedAgentID interface{} = nil
+	if req.AssignedAgentID != "" {
+		assignedAgentID = req.AssignedAgentID
+	}
+
+	_, err := db.Exec(`
+		INSERT INTO issues (id, project_id, title, description, priority, status,
+		                   created_by, created_by_type, assigned_agent_id, queued_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, issueID, req.ProjectID, req.Title, req.Description, req.Priority, req.Status,
+		req.CreatedBy, req.CreatedByType, assignedAgentID, timestamp)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id": issueID,
+	})
+}
+
+func issueAPIHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/issues/")
+	parts := strings.Split(path, "/")
+	issueID := parts[0]
+
+	if issueID == "" {
+		http.Error(w, "Issue ID required", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "PUT":
+		if len(parts) > 1 && parts[1] == "status" {
+			updateIssueStatusHandler(w, r, issueID)
+		} else {
+			http.Error(w, "Invalid endpoint", http.StatusBadRequest)
+		}
+	case "DELETE":
+		deleteIssueHandler(w, r, issueID)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func updateIssueStatusHandler(w http.ResponseWriter, r *http.Request, issueID string) {
+	var req struct {
+		Status string `json:"status"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(`UPDATE issues SET status = ? WHERE id = ?`, req.Status, issueID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func deleteIssueHandler(w http.ResponseWriter, r *http.Request, issueID string) {
+	_, err := db.Exec(`DELETE FROM issues WHERE id = ?`, issueID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func projectsPageHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var userID string
+	err = db.QueryRow(`SELECT user_id FROM sessions WHERE id = ?`, cookie.Value).Scan(&userID)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var username, email string
+	db.QueryRow(`SELECT name, email FROM users WHERE id = ?`, userID).Scan(&username, &email)
+
+	data := map[string]interface{}{
+		"Username": username,
+		"Email":    email,
+		"UserID":   userID,
+	}
+
+	renderTemplate(w, "projects.html", data)
+}
+
+func projectsAPIHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID string
+	err = db.QueryRow(`SELECT user_id FROM sessions WHERE id = ?`, cookie.Value).Scan(&userID)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		listProjectsHandler(w, r, userID)
+	case http.MethodPost:
+		createProjectHandler(w, r, userID)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func listProjectsHandler(w http.ResponseWriter, r *http.Request, userID string) {
+	rows, err := db.Query(`
+		SELECT DISTINCT p.id, p.name, p.description, p.owner_id, p.created_at,
+		       (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) as member_count
+		FROM projects p
+		LEFT JOIN project_members pm ON p.id = pm.project_id
+		WHERE p.owner_id = ? OR pm.user_id = ?
+		ORDER BY p.created_at DESC
+	`, userID, userID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	projects := make([]map[string]interface{}, 0)
+	for rows.Next() {
+		var id, name, ownerID string
+		var description sql.NullString
+		var createdAt time.Time
+		var memberCount int
+
+		rows.Scan(&id, &name, &description, &ownerID, &createdAt, &memberCount)
+
+		project := map[string]interface{}{
+			"id":           id,
+			"name":         name,
+			"description":  description.String,
+			"owner_id":     ownerID,
+			"created_at":   createdAt,
+			"member_count": memberCount,
+		}
+		projects = append(projects, project)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"projects": projects,
+	})
+}
+
+func createProjectHandler(w http.ResponseWriter, r *http.Request, userID string) {
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Failed to decode request: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Creating project: name=%s, description=%s, user=%s", req.Name, req.Description, userID)
+
+	if req.Name == "" {
+		http.Error(w, "Project name is required", http.StatusBadRequest)
+		return
+	}
+
+	projectID := uuid.New().String()
+	timestamp := time.Now()
+
+	_, err := db.Exec(`
+		INSERT INTO projects (id, name, description, owner_id, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, projectID, req.Name, req.Description, userID, timestamp)
+
+	if err != nil {
+		log.Printf("Failed to insert project: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	memberID := uuid.New().String()
+	_, err = db.Exec(`
+		INSERT INTO project_members (id, project_id, user_id, role, joined_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, memberID, projectID, userID, "owner", timestamp)
+
+	if err != nil {
+		log.Printf("Failed to insert project member: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Project created successfully: %s", projectID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id": projectID,
+	})
+}
+
+func projectInviteHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID string
+	err = db.QueryRow(`SELECT user_id FROM sessions WHERE id = ?`, cookie.Value).Scan(&userID)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/projects/")
+	parts := strings.Split(path, "/")
+	projectID := parts[0]
+
+	if projectID == "" || len(parts) < 2 || parts[1] != "invite" {
+		http.Error(w, "Invalid endpoint", http.StatusBadRequest)
+		return
+	}
+
+	var ownerID string
+	err = db.QueryRow(`SELECT owner_id FROM projects WHERE id = ?`, projectID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "Project not found", http.StatusNotFound)
+		return
+	}
+
+	if ownerID != userID {
+		http.Error(w, "Only project owner can create invites", http.StatusForbidden)
+		return
+	}
+
+	inviteID := uuid.New().String()
+	code := uuid.New().String()[:8]
+	timestamp := time.Now()
+
+	log.Printf("Generating invite for project %s: code=%s", projectID, code)
+
+	_, err = db.Exec(`
+		INSERT INTO invite_links (id, project_id, code, created_by, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, inviteID, projectID, code, userID, timestamp)
+
+	if err != nil {
+		log.Printf("Failed to create invite link: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Invite created successfully: code=%s", code)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code": code,
+	})
+}
+
+func inviteAcceptHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var userID string
+	err = db.QueryRow(`SELECT user_id FROM sessions WHERE id = ?`, cookie.Value).Scan(&userID)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	code := strings.TrimPrefix(r.URL.Path, "/invite/")
+	if code == "" {
+		http.Error(w, "Invalid invite code", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Accepting invite with code: %s", code)
+
+	var projectID, inviteID string
+	var uses int
+	var maxUses sql.NullInt64
+	var expiresAt sql.NullTime
+
+	err = db.QueryRow(`
+		SELECT id, project_id, uses, max_uses, expires_at
+		FROM invite_links
+		WHERE code = ?
+	`, code).Scan(&inviteID, &projectID, &uses, &maxUses, &expiresAt)
+
+	if err != nil {
+		log.Printf("Failed to find invite: %v", err)
+		http.Error(w, "Invalid or expired invite link", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("Found invite: project=%s, uses=%d, maxUses=%v", projectID, uses, maxUses)
+
+	if expiresAt.Valid && expiresAt.Time.Before(time.Now()) {
+		http.Error(w, "Invite link has expired", http.StatusGone)
+		return
+	}
+
+	if maxUses.Valid && maxUses.Int64 > 0 && int64(uses) >= maxUses.Int64 {
+		http.Error(w, "Invite link has reached maximum uses", http.StatusGone)
+		return
+	}
+
+	var existingMember string
+	err = db.QueryRow(`
+		SELECT id FROM project_members WHERE project_id = ? AND user_id = ?
+	`, projectID, userID).Scan(&existingMember)
+
+	if err == nil {
+		http.Redirect(w, r, "/project?id="+projectID, http.StatusSeeOther)
+		return
+	}
+
+	memberID := uuid.New().String()
+	_, err = db.Exec(`
+		INSERT INTO project_members (id, project_id, user_id, role, joined_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, memberID, projectID, userID, "member", time.Now())
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec(`UPDATE invite_links SET uses = uses + 1 WHERE id = ?`, inviteID)
+	if err != nil {
+		log.Printf("Failed to update invite uses: %v", err)
+	}
+
+	http.Redirect(w, r, "/project?id="+projectID, http.StatusSeeOther)
 }
 
 func initDatabase() error {
@@ -510,6 +1026,34 @@ func createTables() error {
 				FOREIGN KEY (issue_id) REFERENCES issues(id)
 			)`,
 		},
+		{
+			name: "project_members",
+			query: `CREATE TABLE IF NOT EXISTS project_members (
+				id TEXT PRIMARY KEY,
+				project_id TEXT NOT NULL,
+				user_id TEXT NOT NULL,
+				role TEXT NOT NULL,
+				joined_at TIMESTAMP NOT NULL,
+				FOREIGN KEY (project_id) REFERENCES projects(id),
+				FOREIGN KEY (user_id) REFERENCES users(id),
+				UNIQUE(project_id, user_id)
+			)`,
+		},
+		{
+			name: "invite_links",
+			query: `CREATE TABLE IF NOT EXISTS invite_links (
+				id TEXT PRIMARY KEY,
+				project_id TEXT NOT NULL,
+				code TEXT UNIQUE NOT NULL,
+				created_by TEXT NOT NULL,
+				expires_at TIMESTAMP,
+				max_uses INTEGER,
+				uses INTEGER DEFAULT 0,
+				created_at TIMESTAMP NOT NULL,
+				FOREIGN KEY (project_id) REFERENCES projects(id),
+				FOREIGN KEY (created_by) REFERENCES users(id)
+			)`,
+		},
 	}
 
 	for _, tbl := range tables {
@@ -547,7 +1091,14 @@ func main() {
 	mux.HandleFunc("/", indexHandler)
 	mux.HandleFunc("/login", loginHandler)
 	mux.HandleFunc("/logout", logoutHandler)
+	mux.HandleFunc("/projects", projectsPageHandler)
 	mux.HandleFunc("/project", projectHandler)
+	mux.HandleFunc("/kanban", kanbanHandler)
+	mux.HandleFunc("/api/projects", projectsAPIHandler)
+	mux.HandleFunc("/api/projects/", projectInviteHandler)
+	mux.HandleFunc("/api/issues", issuesAPIHandler)
+	mux.HandleFunc("/api/issues/", issueAPIHandler)
+	mux.HandleFunc("/invite/", inviteAcceptHandler)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		wsHandler(w, r, hub)
 	})

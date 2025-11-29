@@ -19,7 +19,8 @@
 
             <div class="project-info">
                 <h3>Current Project</h3>
-                <p class="project-name">Default Project</p>
+                <p class="project-name">{{.ProjectName}}</p>
+                <a href="/projects" class="project-switch">← All Projects</a>
             </div>
 
             <div class="agents-section">
@@ -72,7 +73,7 @@
             <div class="chat-header">
                 <h2>Team Chat</h2>
                 <div class="header-actions">
-                    <button id="view-kanban-btn" class="btn-secondary">View Kanban</button>
+                    <a href="/kanban?id={{.ProjectID}}" class="btn-secondary">📋 View Kanban</a>
                 </div>
             </div>
 
@@ -122,7 +123,9 @@
         window.userData = {
             userId: "{{.UserID}}",
             username: "{{.Username}}",
-            email: "{{.Email}}"
+            email: "{{.Email}}",
+            projectId: "{{.ProjectID}}",
+            projectName: "{{.ProjectName}}"
         };
     </script>
     <script src="/static/app.js"></script>

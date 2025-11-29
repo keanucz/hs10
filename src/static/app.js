@@ -1,6 +1,9 @@
 let ws = null;
-let reconnectInterval = null;
-const projectId = "default";
+let reconnectTimeout = null;
+let isConnecting = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+let projectId = "default";
 
 const messagesArea = document.getElementById("messages");
 const messageForm = document.getElementById("message-form");
@@ -16,14 +19,32 @@ let autocompleteVisible = false;
 let selectedAutocompleteIndex = 0;
 
 function connectWebSocket() {
+    if (isConnecting) {
+        console.log("Connection attempt already in progress");
+        return;
+    }
+
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        console.log("WebSocket already connected or connecting");
+        return;
+    }
+
+    isConnecting = true;
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws?projectId=${projectId}`;
 
+    console.log("Attempting WebSocket connection...");
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
         console.log("WebSocket connected");
-        clearInterval(reconnectInterval);
+        isConnecting = false;
+        reconnectAttempts = 0;
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
         addSystemMessage("Connected to server");
     };
 
@@ -38,14 +59,27 @@ function connectWebSocket() {
 
     ws.onerror = (error) => {
         console.error("WebSocket error:", error);
+        isConnecting = false;
     };
 
     ws.onclose = () => {
         console.log("WebSocket disconnected");
-        addSystemMessage("Disconnected from server. Reconnecting...");
-        reconnectInterval = setInterval(() => {
-            connectWebSocket();
-        }, 3000);
+        isConnecting = false;
+        ws = null;
+
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            addSystemMessage("Failed to reconnect after multiple attempts. Please refresh the page.");
+            return;
+        }
+
+        if (!reconnectTimeout) {
+            reconnectAttempts++;
+            addSystemMessage(`Disconnected from server. Reconnecting (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+            reconnectTimeout = setTimeout(() => {
+                reconnectTimeout = null;
+                connectWebSocket();
+            }, 3000);
+        }
     };
 }
 
@@ -278,5 +312,19 @@ messageForm.addEventListener("submit", (e) => {
     messageInput.value = "";
     hideAutocomplete();
 });
+
+window.addEventListener("beforeunload", () => {
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+    if (ws) {
+        ws.close();
+    }
+});
+
+if (window.userData && window.userData.projectId) {
+    projectId = window.userData.projectId;
+}
 
 connectWebSocket();

@@ -3,6 +3,7 @@
 *.db-shm
 *.db-wal
 data/*
+!data/.gitkeep
 replychat
 *.log
 .DS_Store

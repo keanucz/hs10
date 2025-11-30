@@ -96,6 +96,10 @@ replychat/
   ```bash
   PORT=8080
   OPENAI_API_KEY=your_key_here
+
+  # Uncomment to run agents with the bundled llama.cpp bindings
+  # LOCAL_LLM_MODEL=open_llama_3b/ggml-model-q4_0.gguf
+  # LOCAL_LLM_THREADS=8
   ```
 
 1. Download dependencies:
@@ -199,6 +203,11 @@ Type `@` to see autocomplete dropdown. Use arrow keys or click to select.
 - Flip on the toggle above the composer to let “Clippy” critique your prompt before it ships to the agents.
 - When enabled, your draft routes through `/api/prompt-coach`, where an OpenAI-backed helper analyzes the text and offers a rewrite plus an **Accept & Send** or **Reject** action.
 - Accepted prompts send the refined copy (you can still edit it in the textbox), while rejected prompts fall back to your original wording so you keep the final call.
+
+### AI Providers
+
+- OpenAI GPT-4o Mini (default): Set `OPENAI_API_KEY` and the agents will call OpenAI's Responses API (see `OPENAI_INTEGRATION.md`).
+- Local llama.cpp model: If `OPENAI_API_KEY` is empty but `LOCAL_LLM_MODEL` points to a `.gguf` file, agents run fully on your machine via the bundled `go-llama.cpp` bindings. Configure advanced options and build instructions in `LOCAL_LLM.md`.
 
 ### WebSocket Protocol
 
@@ -446,6 +455,7 @@ log.SetFlags(log.LstdFlags | log.Lshortfile)
 - **CHANGELOG.md** - Recent changes and features
 - **DEVELOPMENT.md** - Developer guide and troubleshooting
 - **OPENAI_INTEGRATION.md** - OpenAI API setup details
+- **LOCAL_LLM.md** - llama.cpp configuration and tuning guide
 - **PROJECT_SUMMARY.md** - Complete project overview
 
 ## Resources

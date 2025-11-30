@@ -28,22 +28,19 @@
         </div>
         <div class="topbar-actions">
           <a href="/projects" class="btn-ghost">← All Projects</a>
-          <a href="/kanban?id={{.ProjectID}}" class="btn-secondary">Kanban</a>
           <a href="/logout" class="btn-outline">Logout</a>
         </div>
       </header>
 
       <div class="chat-layout">
-        <aside class="chat-sidebar">
-          <section class="chat-sidebar-section">
-            <div class="chat-sidebar-header">
-              <p class="chat-panel-eyebrow">Project</p>
-              <h3>{{.ProjectName}}</h3>
-              <p class="chat-panel-subtext">{{.Email}}</p>
-            </div>
-          </section>
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <p class="chat-panel-eyebrow">Workspace</p>
+            <h2>{{.ProjectName}}</h2>
+            <p class="chat-panel-subtext">Member: {{.Username}}</p>
+          </div>
 
-          <section class="chat-sidebar-section">
+          <div class="agents-section">
             <div class="section-header">
               <h3>Active agents</h3>
               <small>Queues auto-refresh</small>
@@ -105,9 +102,9 @@
                 </div>
               </div>
             </div>
-          </section>
+          </div>
 
-          <section class="task-summary chat-sidebar-section">
+          <div class="task-summary">
             <h3>Task queue</h3>
             <div id="task-counts">
               <div class="task-stat">
@@ -133,6 +130,28 @@
               <h1>Team Chat</h1>
             </div>
             <div class="chat-room-meta">
+              <div
+                class="view-switch"
+                role="tablist"
+                aria-label="Workspace views"
+              >
+                <a
+                  href="/project?id={{.ProjectID}}"
+                  class="view-switch-btn active"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  💬 Chat
+                </a>
+                <a
+                  href="/kanban?id={{.ProjectID}}"
+                  class="view-switch-btn"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  📋 Kanban
+                </a>
+              </div>
               <span class="chat-panel-user">{{.Username}}</span>
               <span class="chip chip-live">Live</span>
             </div>

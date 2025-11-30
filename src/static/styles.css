@@ -794,10 +794,10 @@ body {
 .chat-thread {
     flex: 1;
     min-height: 0;
-    border-radius: 8px;
-    border: 1px solid rgba(148,163,184,0.25);
-    padding: 1.25rem;
-    background: #fdfdfd;
+    border-radius: 10px;
+    border: 1px solid rgba(148,163,184,0.35);
+    padding: 1.5rem;
+    background: #f5f6fb;
 }
 
 .chat-input-bar {
@@ -931,6 +931,7 @@ body {
 
 .chat-sidebar-header h3 {
     margin: 0.35rem 0;
+    color: #0b1526;
 }
 
 .section-header {
@@ -1027,7 +1028,7 @@ body {
 
 .project-name {
     font-weight: 600;
-    color: var(--text-primary);
+    color: #0b1526;
 }
 
 .agents-section {

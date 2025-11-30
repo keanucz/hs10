@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y \
     gosu \
     && rm -rf /var/lib/apt/lists/*
 
+RUN git config --system user.name "ReplyChat Agent" && \
+    git config --system user.email "agent@replychat.local"
+
 WORKDIR /app
 
 COPY --from=builder /app/replychat /usr/local/bin/replychat

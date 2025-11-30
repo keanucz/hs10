@@ -193,6 +193,12 @@ Type `@` to see autocomplete dropdown. Use arrow keys or click to select.
 - "api", "backend", "database" → Backend Architect
 - "ui", "frontend", "component" → Frontend Developer
 
+### Prompt Coach (You Suck at Prompting Mode)
+
+- Flip on the toggle above the composer to let “Clippy” critique your prompt before it ships to the agents.
+- When enabled, your draft routes through `/api/prompt-coach`, where an OpenAI-backed helper analyzes the text and offers a rewrite plus an **Accept & Send** or **Reject** action.
+- Accepted prompts send the refined copy (you can still edit it in the textbox), while rejected prompts fall back to your original wording so you keep the final call.
+
 ### WebSocket Protocol
 
 Messages use JSON format:

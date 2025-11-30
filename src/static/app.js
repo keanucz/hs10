@@ -23,6 +23,8 @@ const agents = [
 
 let autocompleteVisible = false;
 let selectedAutocompleteIndex = 0;
+let promptCoachState = null;
+let promptCoachProcessing = false;
 
 function connectWebSocket() {
     if (isConnecting) {
@@ -896,6 +898,14 @@ function createAutocompleteDropdown() {
 }
 
 const autocompleteDropdown = createAutocompleteDropdown();
+const promptCoachToggle = document.getElementById("prompt-coach-toggle");
+const promptCoachCard = document.getElementById("prompt-coach-card");
+const promptCoachAnalysis = document.getElementById("prompt-coach-analysis");
+const promptCoachSuggestionBlock = document.getElementById("prompt-coach-suggestion-block");
+const promptCoachSuggestion = document.getElementById("prompt-coach-suggestion");
+const promptCoachAccept = document.getElementById("prompt-coach-accept");
+const promptCoachReject = document.getElementById("prompt-coach-reject");
+const sendButton = messageForm.querySelector("button[type='submit']");
 
 function showAutocomplete() {
     autocompleteVisible = true;
@@ -917,6 +927,140 @@ function updateAutocompleteSelection() {
         } else {
             item.classList.remove("selected");
         }
+    });
+}
+
+function hidePromptCoachCard() {
+    if (!promptCoachCard) {
+        return;
+    }
+    promptCoachCard.classList.add("hidden");
+    promptCoachCard.classList.remove("loading");
+    if (promptCoachSuggestionBlock) {
+        promptCoachSuggestionBlock.classList.add("hidden");
+    }
+    promptCoachState = null;
+    promptCoachProcessing = false;
+    messageInput.disabled = false;
+    if (sendButton) {
+        sendButton.disabled = false;
+    }
+}
+
+function showPromptCoachLoading() {
+    if (!promptCoachCard) {
+        return;
+    }
+    promptCoachCard.classList.remove("hidden");
+    promptCoachCard.classList.add("loading");
+    if (promptCoachAnalysis) {
+        promptCoachAnalysis.textContent = "Clippy is thinking about your prompt…";
+    }
+    if (promptCoachSuggestionBlock) {
+        promptCoachSuggestionBlock.classList.add("hidden");
+    }
+    if (sendButton) {
+        sendButton.disabled = true;
+    }
+    messageInput.disabled = true;
+}
+
+function showPromptCoachSuggestion(state) {
+    if (!promptCoachCard) {
+        return;
+    }
+    promptCoachCard.classList.remove("loading");
+    if (promptCoachAnalysis) {
+        promptCoachAnalysis.textContent = state.analysis || "Clippy polished your prompt.";
+    }
+    if (promptCoachSuggestionBlock) {
+        promptCoachSuggestionBlock.classList.remove("hidden");
+    }
+    if (promptCoachSuggestion) {
+        promptCoachSuggestion.textContent = state.suggestion || state.original;
+    }
+    if (sendButton) {
+        sendButton.disabled = false;
+    }
+    messageInput.disabled = false;
+    messageInput.focus();
+}
+
+async function requestPromptCoaching(content) {
+    if (!promptCoachToggle) {
+        sendMessage(content);
+        messageInput.value = "";
+        return;
+    }
+    promptCoachProcessing = true;
+    promptCoachState = { original: content };
+    showPromptCoachLoading();
+
+    try {
+        const response = await fetch("/api/prompt-coach", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId, content })
+        });
+
+        if (!response.ok) {
+            throw new Error("Prompt coach error");
+        }
+
+        const data = await response.json();
+        promptCoachState.suggestion = (data.improved_prompt || "").trim();
+        promptCoachState.analysis = (data.analysis || "").trim();
+        messageInput.value = promptCoachState.suggestion || content;
+        showPromptCoachSuggestion(promptCoachState);
+    } catch (err) {
+        console.error("Prompt coach failed", err);
+        addSystemMessage("Clippy is on break, sending your original prompt.");
+        hidePromptCoachCard();
+        sendMessage(content);
+        messageInput.value = "";
+    } finally {
+        promptCoachProcessing = false;
+    }
+}
+
+if (promptCoachToggle) {
+    const stored = localStorage.getItem("promptCoachEnabled");
+    promptCoachToggle.checked = stored === "true";
+    promptCoachToggle.addEventListener("change", () => {
+        localStorage.setItem("promptCoachEnabled", promptCoachToggle.checked ? "true" : "false");
+        if (!promptCoachToggle.checked) {
+            hidePromptCoachCard();
+        }
+    });
+}
+
+if (promptCoachAccept) {
+    promptCoachAccept.addEventListener("click", () => {
+        if (!promptCoachState) {
+            hidePromptCoachCard();
+            return;
+        }
+        const content = (messageInput.value || promptCoachState.suggestion || promptCoachState.original || "").trim();
+        if (!content) {
+            hidePromptCoachCard();
+            return;
+        }
+        sendMessage(content);
+        messageInput.value = "";
+        hidePromptCoachCard();
+    });
+}
+
+if (promptCoachReject) {
+    promptCoachReject.addEventListener("click", () => {
+        if (!promptCoachState) {
+            hidePromptCoachCard();
+            return;
+        }
+        const content = promptCoachState.original;
+        sendMessage(content);
+        messageInput.value = "";
+        hidePromptCoachCard();
     });
 }
 
@@ -982,15 +1126,25 @@ document.addEventListener("click", (e) => {
     }
 });
 
-messageForm.addEventListener("submit", (e) => {
+messageForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    if (promptCoachProcessing) {
+        return;
+    }
 
     const content = messageInput.value.trim();
     if (!content) return;
 
-    sendMessage(content);
-    messageInput.value = "";
     hideAutocomplete();
+
+    if (promptCoachToggle && promptCoachToggle.checked) {
+        await requestPromptCoaching(content);
+    } else {
+        sendMessage(content);
+        messageInput.value = "";
+        hidePromptCoachCard();
+    }
 });
 
 // Handle Enter key for textarea (Enter to submit, Shift+Enter for new line)

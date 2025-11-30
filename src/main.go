@@ -16,6 +16,7 @@ import (
 	"replychat/src/agents"
 	"replychat/src/monitoring"
 	"replychat/src/projectfs"
+	"replychat/src/promptcoach"
 	"strings"
 	"sync"
 	"syscall"
@@ -37,6 +38,7 @@ var parsedTemplates = template.Must(template.ParseFS(templateFS, "template/*.htm
 
 var db *sql.DB
 var globalHub *Hub
+var promptCoach *promptcoach.Coach
 
 var defaultAgents = []string{
 	"product_manager",
@@ -1131,6 +1133,45 @@ func dialogActionHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Invalid dialog endpoint", http.StatusBadRequest)
 }
 
+func promptCoachAPIHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ProjectID string `json:"projectId"`
+		Content   string `json:"content"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Content == "" {
+		http.Error(w, "content required", http.StatusBadRequest)
+		return
+	}
+
+	if promptCoach == nil {
+		promptCoach = promptcoach.New()
+	}
+
+	ctx, cancel := promptcoach.TimeoutContext(r.Context())
+	defer cancel()
+
+	result, err := promptCoach.ImprovePrompt(ctx, req.Content)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 func agentQueuesAPIHandler(w http.ResponseWriter, r *http.Request) {
 	projectID := r.URL.Query().Get("project_id")
 	if projectID == "" {
@@ -2201,6 +2242,8 @@ func main() {
 	}
 	defer db.Close()
 
+	promptCoach = promptcoach.New()
+
 	hub := newHub()
 	globalHub = hub
 	go hub.run()
@@ -2228,6 +2271,7 @@ func main() {
 	mux.HandleFunc("/api/dialogs/", dialogActionHandler)
 	mux.HandleFunc("/api/agent-queues", agentQueuesAPIHandler)
 	mux.HandleFunc("/api/agent-status", agentStatusAPIHandler)
+	mux.HandleFunc("/api/prompt-coach", promptCoachAPIHandler)
 	mux.HandleFunc("/invite/", inviteAcceptHandler)
 	mux.Handle("/metrics", monitoring.Handler())
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

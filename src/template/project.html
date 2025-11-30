@@ -146,6 +146,46 @@
             </div>
           </div>
 
+          <div class="prompt-coach-bar">
+            <label class="prompt-coach-toggle">
+              <input type="checkbox" id="prompt-coach-toggle" />
+              <span>“You Suck at Prompting” mode</span>
+            </label>
+            <small>Clippy reviews your prompt before it reaches the team.</small>
+          </div>
+
+          <div id="prompt-coach-card" class="prompt-coach-card hidden">
+            <div class="clippy-avatar" aria-hidden="true">📎</div>
+            <div class="prompt-coach-body">
+              <p id="prompt-coach-analysis" class="coach-analysis">
+                Clippy is thinking...
+              </p>
+              <div
+                id="prompt-coach-suggestion-block"
+                class="coach-suggestion hidden"
+              >
+                <strong>Improved prompt</strong>
+                <p id="prompt-coach-suggestion"></p>
+              </div>
+              <div class="coach-actions">
+                <button
+                  type="button"
+                  id="prompt-coach-reject"
+                  class="btn-secondary small"
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  id="prompt-coach-accept"
+                  class="btn-primary small"
+                >
+                  Accept &amp; Send
+                </button>
+              </div>
+            </div>
+          </div>
+
           <form id="message-form" class="message-form chat-input-bar">
             <textarea
               id="message-input"

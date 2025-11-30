@@ -15,7 +15,6 @@
       href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
     />
     <link rel="stylesheet" href="/static/styles.css" />
-    <link rel="stylesheet" href="/static/kanban.css" />
   </head>
   <body class="kanban-body">
     <div class="kanban-app">
@@ -33,20 +32,13 @@
         </div>
       </header>
 
-      <div class="kanban-layout">
-        <aside class="kanban-sidebar">
+      <div class="app-container kanban-layout">
+        <aside class="sidebar">
           <div class="sidebar-header">
             <p class="chat-panel-eyebrow">Workspace</p>
             <h2>{{.ProjectName}}</h2>
             <p class="chat-panel-subtext">Member: {{.Username}}</p>
           </div>
-
-          <nav class="sidebar-nav">
-            <a href="/project?id={{.ProjectID}}" class="nav-link">💬 Chat</a>
-            <a href="/kanban?id={{.ProjectID}}" class="nav-link active"
-              >📋 Kanban</a
-            >
-          </nav>
 
           <div class="kanban-filters">
             <h3>Filters</h3>
@@ -81,10 +73,36 @@
               <h1>Task board</h1>
             </div>
             <div class="header-actions">
-              <button id="create-task-btn" class="btn-primary">
-                + New Task
-              </button>
-              <button id="refresh-btn" class="btn-secondary">↻ Refresh</button>
+              <div class="board-actions">
+                <button id="create-task-btn" class="btn-primary">
+                  + New Task
+                </button>
+                <button id="refresh-btn" class="btn-secondary">
+                  ↻ Refresh
+                </button>
+              </div>
+              <div
+                class="view-switch"
+                role="tablist"
+                aria-label="Workspace views"
+              >
+                <a
+                  href="/project?id={{.ProjectID}}"
+                  class="view-switch-btn"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  💬 Chat
+                </a>
+                <a
+                  href="/kanban?id={{.ProjectID}}"
+                  class="view-switch-btn active"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  📋 Kanban
+                </a>
+              </div>
             </div>
           </div>
 

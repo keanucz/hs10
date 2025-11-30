@@ -119,7 +119,23 @@ replychat/
   docker-compose up --build
   ```
 
-1. Access at `http://localhost:8080`
+1. Access the app at `http://localhost:8080`
+
+## Monitoring & Observability
+
+- The API now exposes Prometheus metrics at `http://localhost:8080/metrics`, including:
+  - `replychat_agent_active{project_id,agent_id}` – concurrent agent jobs
+  - `replychat_agent_runs_total{project_id,agent_id}` – completed agent runs
+  - `replychat_messages_total{project_id,sender_type,sender_id,message_type}` – persisted messages
+  - `replychat_characters_total{project_id,sender_type,sender_id,message_type}` – Unicode characters streamed
+  - `replychat_ws_clients{project_id}` – live WebSocket connections
+  - `replychat_agent_queue_depth{project_id,agent_id}` – queued issues per agent
+  - `replychat_agent_run_duration_seconds{project_id,agent_id}` – histogram buckets for run duration (powering p95 insights)
+- `docker-compose up --build` also starts Prometheus (`http://localhost:9090`) and Grafana (`http://localhost:3000`).
+- Grafana auto-loads the **Replychat Monitoring** dashboard (folder: Replychat) and connects to the Prometheus data source; log in with `admin/admin` on first boot.
+- The dashboard defaults to the last hour and exposes a `Project` variable (multi-select with an `All` option) so you can slice metrics per project while still keeping aggregate views (summing over the selection).
+- Panels now cover active agents, per-project throughput, characters streamed, queue depth, WebSocket clients, agent run p95, and hourly run completions—use the same labels if you want to craft custom queries for alerts.
+- To customize, edit the files under `monitoring/` (Prometheus scrape config, Grafana provisioning, dashboard JSON) and re-run `docker-compose up`.
 
 ### Building Binary
 

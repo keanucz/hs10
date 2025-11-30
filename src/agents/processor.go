@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"replychat/src/monitoring"
 	"replychat/src/projectfs"
 
 	"github.com/google/uuid"
@@ -139,6 +140,13 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, issueID, 
 	var planNotes []string
 	var planForMessage *AgentActionPlan
 	var gitResult *projectfs.CommitResult
+	start := time.Now()
+
+	monitoring.AgentWorkStarted(projectID, agentType)
+	defer func() {
+		monitoring.AgentWorkCompleted(projectID, agentType)
+		monitoring.RecordAgentDuration(projectID, agentType, time.Since(start))
+	}()
 
 	workspacePath, workspaceErr := p.ensureWorkspace(projectID)
 	if workspaceErr != nil {
@@ -314,6 +322,8 @@ func (p *MessageProcessor) sendAgentMessage(projectID, agentType, content, messa
 		log.Printf("agent: failed to save %s message: %v", messageType, err)
 		return
 	}
+
+	monitoring.RecordMessage(projectID, "agent", agentType, messageType, content)
 
 	messagePayload := map[string]interface{}{
 		"id":          messageID,

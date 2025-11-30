@@ -17,9 +17,9 @@
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/kanban.css" />
   </head>
-  <body class="app-body">
-    <div class="workspace-shell">
-      <header class="workspace-topbar container">
+  <body class="kanban-body">
+    <div class="kanban-app">
+      <header class="kanban-topbar">
         <div class="topbar-left">
           <div class="logo-mark small">↺</div>
           <div>
@@ -28,27 +28,17 @@
           </div>
         </div>
         <div class="topbar-actions">
-          <span class="chip chip-live">Realtime sync</span>
-          <a href="/project?id={{.ProjectID}}" class="ghost-link"
-            >← Back to Chat</a
-          >
+          <a href="/project?id={{.ProjectID}}" class="btn-ghost">← Chat room</a>
           <a href="/logout" class="btn-outline">Logout</a>
         </div>
       </header>
 
-      <div class="app-container">
-        <aside class="sidebar">
+      <div class="kanban-layout">
+        <aside class="kanban-sidebar">
           <div class="sidebar-header">
-            <h2>ReplyChat</h2>
-            <div class="user-info">
-              <span class="user-name">{{.Username}}</span>
-              <a href="/logout" class="logout-link">Logout</a>
-            </div>
-          </div>
-
-          <div class="project-info">
-            <h3>{{.ProjectName}}</h3>
-            <a href="/projects" class="project-switch">← All Projects</a>
+            <p class="chat-panel-eyebrow">Workspace</p>
+            <h2>{{.ProjectName}}</h2>
+            <p class="chat-panel-subtext">Member: {{.Username}}</p>
           </div>
 
           <nav class="sidebar-nav">
@@ -67,6 +57,8 @@
                 <option value="product_manager">Product Manager</option>
                 <option value="backend_architect">Backend Architect</option>
                 <option value="frontend_developer">Frontend Developer</option>
+                <option value="qa_tester">QA Tester</option>
+                <option value="devops_engineer">DevOps Engineer</option>
               </select>
             </div>
             <div class="filter-group">
@@ -82,9 +74,12 @@
           </div>
         </aside>
 
-        <main class="kanban-main">
+        <main class="kanban-board-wrapper">
           <div class="kanban-header">
-            <h1>Task Board</h1>
+            <div>
+              <p class="chat-panel-eyebrow">Issues</p>
+              <h1>Task board</h1>
+            </div>
             <div class="header-actions">
               <button id="create-task-btn" class="btn-primary">
                 + New Task
@@ -106,6 +101,14 @@
               <span class="agent-label">Frontend Developer</span>
               <span class="agent-queue-count">0</span>
             </div>
+            <div class="agent-queue-chip" data-agent-id="qa_tester">
+              <span class="agent-label">QA Tester</span>
+              <span class="agent-queue-count">0</span>
+            </div>
+            <div class="agent-queue-chip" data-agent-id="devops_engineer">
+              <span class="agent-label">DevOps Engineer</span>
+              <span class="agent-queue-count">0</span>
+            </div>
           </div>
 
           <div class="kanban-board" id="kanban-board">
@@ -114,9 +117,7 @@
                 <span class="column-title">Proposed</span>
                 <span class="column-count" id="count-proposed">0</span>
               </div>
-              <div class="column-content" id="column-proposed">
-                <!-- Task cards go here -->
-              </div>
+              <div class="column-content" id="column-proposed"></div>
             </div>
 
             <div class="kanban-column" data-status="todo">
@@ -124,9 +125,7 @@
                 <span class="column-title">To Do</span>
                 <span class="column-count" id="count-todo">0</span>
               </div>
-              <div class="column-content" id="column-todo">
-                <!-- Task cards go here -->
-              </div>
+              <div class="column-content" id="column-todo"></div>
             </div>
 
             <div class="kanban-column" data-status="inProgress">
@@ -134,9 +133,7 @@
                 <span class="column-title">In Progress</span>
                 <span class="column-count" id="count-inProgress">0</span>
               </div>
-              <div class="column-content" id="column-inProgress">
-                <!-- Task cards go here -->
-              </div>
+              <div class="column-content" id="column-inProgress"></div>
             </div>
 
             <div class="kanban-column" data-status="review">
@@ -144,9 +141,7 @@
                 <span class="column-title">Review</span>
                 <span class="column-count" id="count-review">0</span>
               </div>
-              <div class="column-content" id="column-review">
-                <!-- Task cards go here -->
-              </div>
+              <div class="column-content" id="column-review"></div>
             </div>
 
             <div class="kanban-column" data-status="done">
@@ -154,9 +149,7 @@
                 <span class="column-title">Done</span>
                 <span class="column-count" id="count-done">0</span>
               </div>
-              <div class="column-content" id="column-done">
-                <!-- Task cards go here -->
-              </div>
+              <div class="column-content" id="column-done"></div>
             </div>
           </div>
         </main>

@@ -1,0 +1,162 @@
+{
+  "uid": "replychat-overview",
+  "title": "Replychat Monitoring",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "project",
+        "label": "Project",
+        "type": "query",
+        "hide": 0,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "replychat-prometheus"
+        },
+        "definition": "label_values(replychat_messages_total, project_id)",
+        "query": "label_values(replychat_messages_total, project_id)",
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Agents",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "replychat_agent_active{project_id=~\"$project\"}",
+          "legendFormat": "{{project_id}} • {{agent_id}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Messages / Minute",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (project_id, sender_type) (rate(replychat_messages_total{project_id=~\"$project\"}[5m]))",
+          "legendFormat": "{{project_id}} • {{sender_type}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Characters Streamed (agents, last hour)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (project_id, sender_id) (increase(replychat_characters_total{project_id=~\"$project\", sender_type=\"agent\"}[1h]))",
+          "legendFormat": "{{project_id}} • {{sender_id}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Messages per Project (1h)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (project_id) (increase(replychat_messages_total{project_id=~\"$project\"}[1h]))"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value",
+        "colorMode": "palette-classic"
+      }
+    },
+    {
+      "id": 5,
+      "title": "WebSocket Clients",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "replychat_ws_clients{project_id=~\"$project\"}",
+          "legendFormat": "{{project_id}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Agent Queue Depth",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "replychat_agent_queue_depth{project_id=~\"$project\"}",
+          "legendFormat": "{{project_id}} • {{agent_id}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Agent Run Duration p95",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (project_id, agent_id, le) (rate(replychat_agent_run_duration_seconds_bucket{project_id=~\"$project\"}[15m])))",
+          "legendFormat": "{{project_id}} • {{agent_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Agent Runs Completed (1h)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "replychat-prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (project_id, agent_id) (increase(replychat_agent_runs_total{project_id=~\"$project\"}[1h]))",
+          "legendFormat": "{{project_id}} • {{agent_id}}"
+        }
+      ]
+    }
+  ]
+}

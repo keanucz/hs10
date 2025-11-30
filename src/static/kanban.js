@@ -86,7 +86,9 @@ function createTaskCard(task) {
     const agentNames = {
         'product_manager': 'PM',
         'backend_architect': 'BA',
-        'frontend_developer': 'FE'
+        'frontend_developer': 'FE',
+        'qa_tester': 'QA',
+        'devops_engineer': 'DE'
     };
 
     card.innerHTML = `

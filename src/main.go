@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"replychat/src/agents"
+	"replychat/src/monitoring"
 	"replychat/src/projectfs"
 	"strings"
 	"sync"
@@ -139,9 +140,11 @@ func (h *Hub) run() {
 			h.projectRef[client.projectID]++
 			h.mu.Unlock()
 			log.Printf("ws: client registered, total: %d", len(h.clients))
+			monitoring.WSClientConnected(client.projectID)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
+			removed := false
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
@@ -152,9 +155,13 @@ func (h *Hub) run() {
 						delete(h.projectRef, client.projectID)
 					}
 				}
+				removed = true
 			}
 			h.mu.Unlock()
 			log.Printf("ws: client unregistered, total: %d", len(h.clients))
+			if removed {
+				monitoring.WSClientDisconnected(client.projectID)
+			}
 
 		case message := <-h.broadcast:
 			h.mu.RLock()
@@ -282,6 +289,8 @@ func handleChatMessage(c *Client, msg map[string]interface{}) {
 		return
 	}
 
+	monitoring.RecordMessage(projectID, "user", c.userID, "chat", content)
+
 	response := map[string]interface{}{
 		"type": "message.received",
 		"payload": map[string]interface{}{
@@ -324,6 +333,8 @@ func sendSystemMessage(projectID, content string) {
 		log.Printf("system message: failed to save: %v", err)
 		return
 	}
+
+	monitoring.RecordMessage(projectID, "system", "system", "system", content)
 
 	if globalHub == nil {
 		return
@@ -1432,6 +1443,10 @@ func collectQueueStatsForProject(projectID string) ([]AgentQueueStat, error) {
 		result = append(result, *entry)
 	}
 
+	for _, entry := range result {
+		monitoring.SetAgentQueueDepth(projectID, entry.AgentID, entry.QueueDepth)
+	}
+
 	return result, nil
 }
 
@@ -2214,6 +2229,7 @@ func main() {
 	mux.HandleFunc("/api/agent-queues", agentQueuesAPIHandler)
 	mux.HandleFunc("/api/agent-status", agentStatusAPIHandler)
 	mux.HandleFunc("/invite/", inviteAcceptHandler)
+	mux.Handle("/metrics", monitoring.Handler())
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		wsHandler(w, r, hub)
 	})

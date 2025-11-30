@@ -16,9 +16,9 @@
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body class="app-body">
-    <div class="workspace-shell">
-      <header class="workspace-topbar container">
+  <body class="chat-body">
+    <div class="chat-app">
+      <header class="chat-topbar">
         <div class="topbar-left">
           <div class="logo-mark small">↺</div>
           <div>
@@ -27,32 +27,28 @@
           </div>
         </div>
         <div class="topbar-actions">
-          <span class="chip chip-live">Live workspace</span>
           <a href="/projects" class="btn-ghost">← All Projects</a>
+          <a href="/kanban?id={{.ProjectID}}" class="btn-secondary">Kanban</a>
           <a href="/logout" class="btn-outline">Logout</a>
         </div>
       </header>
 
-      <div class="app-container">
-        <aside class="sidebar">
-          <div class="sidebar-header">
-            <h2>ReplyChat</h2>
-            <div class="user-info">
-              <span class="user-name">{{.Username}}</span>
+      <div class="chat-layout">
+        <aside class="chat-sidebar">
+          <section class="chat-sidebar-section">
+            <div class="chat-sidebar-header">
+              <p class="chat-panel-eyebrow">Project</p>
+              <h3>{{.ProjectName}}</h3>
+              <p class="chat-panel-subtext">{{.Email}}</p>
             </div>
-          </div>
+          </section>
 
-          <div class="project-info">
-            <h3>Current Project</h3>
-            <p class="project-name">{{.ProjectName}}</p>
-            <a href="/projects" class="btn-ghost project-switch"
-              >← All Projects</a
-            >
-          </div>
-
-          <div class="agents-section">
-            <h3>Active Agents</h3>
-            <div id="agents-list" class="agents-list">
+          <section class="chat-sidebar-section">
+            <div class="section-header">
+              <h3>Active agents</h3>
+              <small>Queues auto-refresh</small>
+            </div>
+            <div id="agents-list" class="agents-list compact">
               <div class="agent-card" data-agent-id="product_manager">
                 <div class="agent-avatar">PM</div>
                 <div class="agent-details">
@@ -109,87 +105,58 @@
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="task-summary">
-            <h3>Task Queue</h3>
+          <section class="task-summary chat-sidebar-section">
+            <h3>Task queue</h3>
             <div id="task-counts">
               <div class="task-stat">
-                <span class="stat-label">Proposed:</span>
+                <span class="stat-label">Proposed</span>
                 <span class="stat-value" id="proposed-count">0</span>
               </div>
               <div class="task-stat">
-                <span class="stat-label">In Progress:</span>
+                <span class="stat-label">In Progress</span>
                 <span class="stat-value" id="inprogress-count">0</span>
               </div>
               <div class="task-stat">
-                <span class="stat-label">Completed:</span>
+                <span class="stat-label">Completed</span>
                 <span class="stat-value" id="completed-count">0</span>
               </div>
             </div>
-          </div>
+          </section>
         </aside>
 
-        <main class="main-content">
-          <div class="chat-header">
-            <h2>Team Chat</h2>
-            <div class="header-actions">
-              <a href="/kanban?id={{.ProjectID}}" class="btn-secondary"
-                >📋 View Kanban</a
-              >
+        <main class="chat-panel">
+          <div class="chat-panel-header">
+            <div class="chat-room-title">
+              <p class="chat-panel-eyebrow">Project · {{.ProjectName}}</p>
+              <h1>Team Chat</h1>
+            </div>
+            <div class="chat-room-meta">
+              <span class="chat-panel-user">{{.Username}}</span>
+              <span class="chip chip-live">Live</span>
             </div>
           </div>
 
-          <div class="chat-container">
-            <div id="messages" class="messages-area">
-              <div class="system-message">
-                <p>
-                  Welcome to ReplyChat! Start a conversation with your AI
-                  agents.
-                </p>
-              </div>
-            </div>
-
-            <div class="message-input-container">
-              <form id="message-form" class="message-form">
-                <textarea
-                  id="message-input"
-                  placeholder="Type a message... (use @AgentName to mention)"
-                  autocomplete="off"
-                  rows="3"
-                  required
-                ></textarea>
-                <button type="submit" class="btn-primary">Send</button>
-              </form>
+          <div id="messages" class="messages-area chat-thread">
+            <div class="system-message">
+              <p>
+                Welcome to ReplyChat! Start a conversation with your AI agents.
+              </p>
             </div>
           </div>
+
+          <form id="message-form" class="message-form chat-input-bar">
+            <textarea
+              id="message-input"
+              placeholder="Type a message… (use @AgentName to mention)"
+              autocomplete="off"
+              rows="3"
+              required
+            ></textarea>
+            <button type="submit" class="btn-primary">Send</button>
+          </form>
         </main>
-
-        <aside class="right-panel" id="right-panel">
-          <div class="panel-header">
-            <h3>Quick Actions</h3>
-            <button
-              class="panel-toggle"
-              id="panel-toggle"
-              aria-label="Toggle panel"
-            >
-              <span class="toggle-icon">◀</span>
-            </button>
-          </div>
-
-          <div class="quick-actions">
-            <button class="action-btn">Create Task</button>
-            <button class="action-btn">Add Agent</button>
-            <button class="action-btn">View Analytics</button>
-          </div>
-
-          <div class="active-tasks">
-            <h3>Active Tasks</h3>
-            <div id="active-tasks-list">
-              <p class="empty-state">No active tasks</p>
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
 
@@ -201,20 +168,6 @@
         projectId: "{{.ProjectID}}",
         projectName: "{{.ProjectName}}",
       };
-
-      // Toggle right panel
-      document.addEventListener("DOMContentLoaded", function () {
-        const panel = document.getElementById("right-panel");
-        const toggle = document.getElementById("panel-toggle");
-        const toggleIcon = toggle.querySelector(".toggle-icon");
-
-        toggle.addEventListener("click", function () {
-          panel.classList.toggle("collapsed");
-          toggleIcon.textContent = panel.classList.contains("collapsed")
-            ? "▶"
-            : "◀";
-        });
-      });
     </script>
     <div id="dialog-overlay" class="dialog-overlay" style="display: none"></div>
     <script src="/static/app.js"></script>

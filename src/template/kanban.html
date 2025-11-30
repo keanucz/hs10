@@ -1,202 +1,245 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kanban - ReplyChat</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="/static/kanban.css">
-</head>
-<body>
-    <div class="app-container">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kanban · ReplyChat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/kanban.css" />
+  </head>
+  <body class="app-body">
+    <div class="workspace-shell">
+      <header class="workspace-topbar container">
+        <div class="topbar-left">
+          <div class="logo-mark small">↺</div>
+          <div>
+            <p class="logo-label">ReplyChat</p>
+            <p class="logo-sub">Kanban · {{.ProjectName}}</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="chip chip-live">Realtime sync</span>
+          <a href="/project?id={{.ProjectID}}" class="ghost-link"
+            >← Back to Chat</a
+          >
+          <a href="/logout" class="btn-outline">Logout</a>
+        </div>
+      </header>
+
+      <div class="app-container">
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>ReplyChat</h2>
-                <div class="user-info">
-                    <span class="user-name">{{.Username}}</span>
-                    <a href="/logout" class="logout-link">Logout</a>
-                </div>
+          <div class="sidebar-header">
+            <h2>ReplyChat</h2>
+            <div class="user-info">
+              <span class="user-name">{{.Username}}</span>
+              <a href="/logout" class="logout-link">Logout</a>
             </div>
+          </div>
 
-            <div class="project-info">
-                <h3>{{.ProjectName}}</h3>
-                <a href="/projects" class="project-switch">← All Projects</a>
+          <div class="project-info">
+            <h3>{{.ProjectName}}</h3>
+            <a href="/projects" class="project-switch">← All Projects</a>
+          </div>
+
+          <nav class="sidebar-nav">
+            <a href="/project?id={{.ProjectID}}" class="nav-link">💬 Chat</a>
+            <a href="/kanban?id={{.ProjectID}}" class="nav-link active"
+              >📋 Kanban</a
+            >
+          </nav>
+
+          <div class="kanban-filters">
+            <h3>Filters</h3>
+            <div class="filter-group">
+              <label>Agent</label>
+              <select id="filter-agent">
+                <option value="">All Agents</option>
+                <option value="product_manager">Product Manager</option>
+                <option value="backend_architect">Backend Architect</option>
+                <option value="frontend_developer">Frontend Developer</option>
+              </select>
             </div>
-
-            <nav class="sidebar-nav">
-                <a href="/project?id={{.ProjectID}}" class="nav-link">💬 Chat</a>
-                <a href="/kanban?id={{.ProjectID}}" class="nav-link active">📋 Kanban</a>
-            </nav>
-
-            <div class="kanban-filters">
-                <h3>Filters</h3>
-                <div class="filter-group">
-                    <label>Agent</label>
-                    <select id="filter-agent">
-                        <option value="">All Agents</option>
-                        <option value="product_manager">Product Manager</option>
-                        <option value="backend_architect">Backend Architect</option>
-                        <option value="frontend_developer">Frontend Developer</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Priority</label>
-                    <select id="filter-priority">
-                        <option value="">All Priorities</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                    </select>
-                </div>
+            <div class="filter-group">
+              <label>Priority</label>
+              <select id="filter-priority">
+                <option value="">All Priorities</option>
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
             </div>
+          </div>
         </aside>
 
         <main class="kanban-main">
-            <div class="kanban-header">
-                <h1>Task Board</h1>
-                <div class="header-actions">
-                    <button id="create-task-btn" class="btn-primary">+ New Task</button>
-                    <button id="refresh-btn" class="btn-secondary">↻ Refresh</button>
-                </div>
+          <div class="kanban-header">
+            <h1>Task Board</h1>
+            <div class="header-actions">
+              <button id="create-task-btn" class="btn-primary">
+                + New Task
+              </button>
+              <button id="refresh-btn" class="btn-secondary">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div class="agent-queue-bar" id="agent-queue-summary">
+            <div class="agent-queue-chip" data-agent-id="product_manager">
+              <span class="agent-label">Product Manager</span>
+              <span class="agent-queue-count">0</span>
+            </div>
+            <div class="agent-queue-chip" data-agent-id="backend_architect">
+              <span class="agent-label">Backend Architect</span>
+              <span class="agent-queue-count">0</span>
+            </div>
+            <div class="agent-queue-chip" data-agent-id="frontend_developer">
+              <span class="agent-label">Frontend Developer</span>
+              <span class="agent-queue-count">0</span>
+            </div>
+          </div>
+
+          <div class="kanban-board" id="kanban-board">
+            <div class="kanban-column" data-status="proposed">
+              <div class="column-header">
+                <span class="column-title">Proposed</span>
+                <span class="column-count" id="count-proposed">0</span>
+              </div>
+              <div class="column-content" id="column-proposed">
+                <!-- Task cards go here -->
+              </div>
             </div>
 
-            <div class="agent-queue-bar" id="agent-queue-summary">
-                <div class="agent-queue-chip" data-agent-id="product_manager">
-                    <span class="agent-label">Product Manager</span>
-                    <span class="agent-queue-count">0</span>
-                </div>
-                <div class="agent-queue-chip" data-agent-id="backend_architect">
-                    <span class="agent-label">Backend Architect</span>
-                    <span class="agent-queue-count">0</span>
-                </div>
-                <div class="agent-queue-chip" data-agent-id="frontend_developer">
-                    <span class="agent-label">Frontend Developer</span>
-                    <span class="agent-queue-count">0</span>
-                </div>
+            <div class="kanban-column" data-status="todo">
+              <div class="column-header">
+                <span class="column-title">To Do</span>
+                <span class="column-count" id="count-todo">0</span>
+              </div>
+              <div class="column-content" id="column-todo">
+                <!-- Task cards go here -->
+              </div>
             </div>
 
-            <div class="kanban-board" id="kanban-board">
-                <div class="kanban-column" data-status="proposed">
-                    <div class="column-header">
-                        <span class="column-title">Proposed</span>
-                        <span class="column-count" id="count-proposed">0</span>
-                    </div>
-                    <div class="column-content" id="column-proposed">
-                        <!-- Task cards go here -->
-                    </div>
-                </div>
-
-                <div class="kanban-column" data-status="todo">
-                    <div class="column-header">
-                        <span class="column-title">To Do</span>
-                        <span class="column-count" id="count-todo">0</span>
-                    </div>
-                    <div class="column-content" id="column-todo">
-                        <!-- Task cards go here -->
-                    </div>
-                </div>
-
-                <div class="kanban-column" data-status="inProgress">
-                    <div class="column-header">
-                        <span class="column-title">In Progress</span>
-                        <span class="column-count" id="count-inProgress">0</span>
-                    </div>
-                    <div class="column-content" id="column-inProgress">
-                        <!-- Task cards go here -->
-                    </div>
-                </div>
-
-                <div class="kanban-column" data-status="review">
-                    <div class="column-header">
-                        <span class="column-title">Review</span>
-                        <span class="column-count" id="count-review">0</span>
-                    </div>
-                    <div class="column-content" id="column-review">
-                        <!-- Task cards go here -->
-                    </div>
-                </div>
-
-                <div class="kanban-column" data-status="done">
-                    <div class="column-header">
-                        <span class="column-title">Done</span>
-                        <span class="column-count" id="count-done">0</span>
-                    </div>
-                    <div class="column-content" id="column-done">
-                        <!-- Task cards go here -->
-                    </div>
-                </div>
+            <div class="kanban-column" data-status="inProgress">
+              <div class="column-header">
+                <span class="column-title">In Progress</span>
+                <span class="column-count" id="count-inProgress">0</span>
+              </div>
+              <div class="column-content" id="column-inProgress">
+                <!-- Task cards go here -->
+              </div>
             </div>
+
+            <div class="kanban-column" data-status="review">
+              <div class="column-header">
+                <span class="column-title">Review</span>
+                <span class="column-count" id="count-review">0</span>
+              </div>
+              <div class="column-content" id="column-review">
+                <!-- Task cards go here -->
+              </div>
+            </div>
+
+            <div class="kanban-column" data-status="done">
+              <div class="column-header">
+                <span class="column-title">Done</span>
+                <span class="column-count" id="count-done">0</span>
+              </div>
+              <div class="column-content" id="column-done">
+                <!-- Task cards go here -->
+              </div>
+            </div>
+          </div>
         </main>
+      </div>
     </div>
 
     <!-- Task Detail Modal -->
-    <div id="task-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">Task Details</h2>
-                <button class="modal-close" onclick="closeTaskModal()">&times;</button>
-            </div>
-            <div class="modal-body" id="modal-body">
-                <!-- Task details populated by JS -->
-            </div>
+    <div id="task-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Task Details</h2>
+          <button class="modal-close" onclick="closeTaskModal()">
+            &times;
+          </button>
         </div>
+        <div class="modal-body" id="modal-body">
+          <!-- Task details populated by JS -->
+        </div>
+      </div>
     </div>
 
     <!-- Create Task Modal -->
-    <div id="create-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Create New Task</h2>
-                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="create-task-form">
-                    <div class="form-group">
-                        <label for="task-title">Title</label>
-                        <input type="text" id="task-title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="task-description">Description</label>
-                        <textarea id="task-description" rows="4"></textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="task-priority">Priority</label>
-                            <select id="task-priority">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                                <option value="urgent">Urgent</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="task-agent">Assign To</label>
-                            <select id="task-agent">
-                                <option value="">Unassigned</option>
-                                <option value="product_manager">Product Manager</option>
-                                <option value="backend_architect">Backend Architect</option>
-                                <option value="frontend_developer">Frontend Developer</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" onclick="closeCreateModal()" class="btn-secondary">Cancel</button>
-                        <button type="submit" class="btn-primary">Create Task</button>
-                    </div>
-                </form>
-            </div>
+    <div id="create-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Create New Task</h2>
+          <button class="modal-close" onclick="closeCreateModal()">
+            &times;
+          </button>
         </div>
+        <div class="modal-body">
+          <form id="create-task-form">
+            <div class="form-group">
+              <label for="task-title">Title</label>
+              <input type="text" id="task-title" required />
+            </div>
+            <div class="form-group">
+              <label for="task-description">Description</label>
+              <textarea id="task-description" rows="4"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="task-priority">Priority</label>
+                <select id="task-priority">
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="task-agent">Assign To</label>
+                <select id="task-agent">
+                  <option value="">Unassigned</option>
+                  <option value="product_manager">Product Manager</option>
+                  <option value="backend_architect">Backend Architect</option>
+                  <option value="frontend_developer">Frontend Developer</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button
+                type="button"
+                onclick="closeCreateModal()"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn-primary">Create Task</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
 
     <script>
-        window.userData = {
-            userId: "{{.UserID}}",
-            username: "{{.Username}}",
-            projectId: "{{.ProjectID}}",
-            projectName: "{{.ProjectName}}"
-        };
+      window.userData = {
+        userId: "{{.UserID}}",
+        username: "{{.Username}}",
+        projectId: "{{.ProjectID}}",
+        projectName: "{{.ProjectName}}",
+      };
     </script>
     <script src="/static/kanban.js"></script>
-</body>
+  </body>
 </html>

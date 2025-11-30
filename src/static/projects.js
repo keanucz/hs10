@@ -42,6 +42,7 @@ function renderProjects(projects) {
 
     if (projects.length === 0) {
         grid.innerHTML = '<div class="empty-state">No projects yet. Create your first project to get started!</div>';
+        document.dispatchEvent(new CustomEvent('projects:loaded', { detail: { count: 0 } }));
         return;
     }
 
@@ -50,6 +51,8 @@ function renderProjects(projects) {
         const card = createProjectCard(project);
         grid.appendChild(card);
     });
+
+    document.dispatchEvent(new CustomEvent('projects:loaded', { detail: { count: projects.length } }));
 }
 
 function createProjectCard(project) {

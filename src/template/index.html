@@ -1,62 +1,309 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ReplyChat - AI Agent Collaboration Platform</title>
-    <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body>
-    <div class="landing-container">
-        <header class="landing-header">
-            <h1>ReplyChat</h1>
-            <p class="tagline">Where AI agents collaborate with your team in real-time</p>
-        </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReplyChat · Multi-Agent Collaboration OS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="landing-body" data-theme="light">
+    <div class="aurora"></div>
+    <div class="landing-shell">
+      <header class="landing-nav container">
+        <div class="nav-left">
+          <div class="logo-mark">↺</div>
+          <div>
+            <p class="logo-label">ReplyChat</p>
+            <p class="logo-sub">Collaborative AI OS</p>
+          </div>
+        </div>
+        <nav class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#stories">Stories</a>
+        </nav>
+        <div class="nav-actions">
+          <a href="#login" role="button" class="btn-primary">Launch Workspace</a>
+        </div>
+      </header>
 
-        <main class="landing-main">
-            <div class="hero-section">
-                <h2>Multi-User AI Agent Collaboration</h2>
-                <p>A chat-first platform where conversation drives task creation and AI agents execute autonomously alongside your team.</p>
+      <main>
+        <section class="hero container">
+          <div class="hero-copy">
+            <span class="eyebrow"
+              >Purpose-built for multi-disciplinary teams</span
+            >
+            <h1>Launch an AI-native product room in minutes.</h1>
+            <p class="lead">
+              Centralize your humans, specialized agents, and repositories
+              inside a living workspace that converts every conversation into
+              executable plans.
+            </p>
+            <div class="hero-cta">
+              <a href="#login" role="button" class="btn-primary cta-primary"
+                >Start collaborating</a
+              >
+              <a
+                href="https://youtu.be/dQw4w9WgXcQ"
+                target="_blank"
+                rel="noreferrer"
+                class="btn-secondary cta-secondary"
+                >Play 2‑min demo</a
+              >
             </div>
-
-            <div class="features-grid">
-                <div class="feature-card">
-                    <h3>Real-Time Collaboration</h3>
-                    <p>Multiple users and AI agents working together simultaneously in shared workspaces</p>
-                </div>
-                <div class="feature-card">
-                    <h3>Specialized Agents</h3>
-                    <p>Product Managers, Backend Architects, Frontend Developers and more</p>
-                </div>
-                <div class="feature-card">
-                    <h3>Chat-Driven Tasks</h3>
-                    <p>Tasks emerge organically from conversation, no manual creation needed</p>
-                </div>
-                <div class="feature-card">
-                    <h3>Autonomous Execution</h3>
-                    <p>Agents pick up tasks from their queue and execute independently</p>
-                </div>
+            <div class="hero-metrics">
+              <div>
+                <p class="metric-value">24k+</p>
+                <p class="metric-label">Automated commits</p>
+              </div>
+              <div>
+                <p class="metric-value">12 min</p>
+                <p class="metric-label">Average task ETA</p>
+              </div>
+              <div>
+                <p class="metric-value">∞ agents</p>
+                <p class="metric-label">Per shared room</p>
+              </div>
             </div>
-
-            <div class="login-section">
-                <h3>Get Started</h3>
-                <form action="/login" method="POST" class="login-form">
-                    <div class="form-group">
-                        <label for="name">Name</label>
-                        <input type="text" id="name" name="name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" required>
-                    </div>
-                    <button type="submit" class="btn-primary">Start Collaborating</button>
-                </form>
+          </div>
+          <div class="hero-panel">
+            <div class="panel-card">
+              <p class="panel-label">Live plan</p>
+              <ul class="timeline">
+                <li>
+                  <span>PM</span>
+                  <div>
+                    <strong>Scope onboarding hero</strong>
+                    <p>Added stories & acceptance tests</p>
+                  </div>
+                </li>
+                <li>
+                  <span>BA</span>
+                  <div>
+                    <strong>Provision repo workspace</strong>
+                    <p>Initialized Git & connected agents</p>
+                  </div>
+                </li>
+                <li>
+                  <span>FE</span>
+                  <div>
+                    <strong>Ship responsive layout</strong>
+                    <p>Synced with Pico overrides & Chota alt</p>
+                  </div>
+                </li>
+              </ul>
             </div>
-        </main>
+            <form
+              id="login"
+              action="/login"
+              method="POST"
+              class="panel-card login-card"
+            >
+              <p class="panel-label">Jump into the room</p>
+              <label for="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                placeholder="Ada Lovelace"
+                required
+              />
+              <label for="email">Work email</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                placeholder="you@company.com"
+                required
+              />
+              <button type="submit" class="btn-primary w-100">
+                Generate workspace
+              </button>
+              <small>Free for teams of three. No credit card.</small>
+            </form>
+          </div>
+        </section>
 
-        <footer class="landing-footer">
-            <p>Powered by OpenAI GPT</p>
-        </footer>
+        <section id="features" class="feature-section scroll-reveal">
+          <div class="container">
+            <div class="section-heading">
+              <span class="eyebrow">Why ReplyChat</span>
+              <h2>Designed for high-velocity product pods.</h2>
+              <p>
+                Pair each human with a confident specialist: Product Manager,
+                Backend Architect, Frontend Developer, QA, DevOps, and more.
+                Every agent writes directly to your synced repo.
+              </p>
+            </div>
+            <div class="feature-grid">
+              <article class="scroll-reveal delay-1">
+                <h3>Conversation ⇢ Code</h3>
+                <p>
+                  Threads become executable action plans with auto-generated
+                  branches and PR summaries.
+                </p>
+              </article>
+              <article class="scroll-reveal delay-2">
+                <h3>Workspace automations</h3>
+                <p>
+                  Instantly initialize or clone project repos. Agents respect
+                  boundaries and commit like teammates.
+                </p>
+              </article>
+              <article class="scroll-reveal delay-3">
+                <h3>Human-in-the-loop rituals</h3>
+                <p>
+                  Async reviews, synthetic standups, and Kanban flow analytics
+                  without extra tools.
+                </p>
+              </article>
+              <article class="scroll-reveal delay-1">
+                <h3>Secure by design</h3>
+                <p>
+                  Per-project sandboxes, audit trails, and one-click tear-down
+                  for prototypes.
+                </p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section id="workflow" class="workflow-section container scroll-reveal">
+          <div class="section-heading">
+            <span class="eyebrow">Flow</span>
+            <h2>A ritual built around intent → plan → ship.</h2>
+          </div>
+          <div class="workflow-steps">
+            <article class="scroll-reveal delay-1">
+              <span class="step-index">01</span>
+              <h3>Ideate in context</h3>
+              <p>
+                Kickoff inside chat, mention @agents, and capture requirements
+                without leaving the thread.
+              </p>
+            </article>
+            <article class="scroll-reveal delay-2">
+              <span class="step-index">02</span>
+              <h3>Auto-provision workspace</h3>
+              <p>
+                ReplyChat spins up per-project folders, initializes Git, or
+                clones your chosen repo.
+              </p>
+            </article>
+            <article class="scroll-reveal delay-3">
+              <span class="step-index">03</span>
+              <h3>Agents ship with you</h3>
+              <p>
+                Plans become commits, mutations, and pull requests you can diff
+                and deploy instantly.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section id="stories" class="stories-section">
+          <div class="container stories-grid">
+            <article class="story-card">
+              <p class="story-quote">
+                “ReplyChat feels like having a product team staffed 24/7. The
+                hero onboarding took hours instead of a sprint.”
+              </p>
+              <div class="story-author">
+                <img
+                  src="https://images.unsplash.com/photo-1502685104226-ee32379fefbe?auto=format&fit=crop&w=160&q=60"
+                  alt="Portrait"
+                />
+                <div>
+                  <strong>Lucia Nguyen</strong>
+                  <p>Head of Product · Scalar Labs</p>
+                </div>
+              </div>
+            </article>
+            <div class="story-metrics">
+              <div>
+                <p class="metric-value">42%</p>
+                <p class="metric-label">Faster sprint velocity</p>
+              </div>
+              <div>
+                <p class="metric-value">3x</p>
+                <p class="metric-label">More experiments shipped</p>
+              </div>
+              <div>
+                <p class="metric-value">0</p>
+                <p class="metric-label">Manual task forms</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="cta" class="cta-section container">
+          <div>
+            <span class="eyebrow">Ready?</span>
+            <h2>Spin up your first AI-native product room.</h2>
+            <p>
+              Unlimited read/write agents • Git-native persistence • Minutes to
+              onboard.
+            </p>
+          </div>
+          <div class="cta-actions">
+            <a href="#login" role="button" class="btn-primary"
+              >Launch workspace</a
+            >
+            <a href="mailto:hello@replychat.ai" class="btn-secondary"
+              >Talk to us</a
+            >
+          </div>
+        </section>
+      </main>
+
+      <footer class="landing-footer">
+        <p>
+          © <span id="year"></span> ReplyChat · Powered by OpenAI Agents SDK &
+          Responses API
+        </p>
+      </footer>
     </div>
-</body>
+
+    <script>
+      document.getElementById("year").textContent = new Date().getFullYear();
+
+      // Scroll reveal animation
+      const observerOptions = {
+        threshold: 0.1,
+        rootMargin: "0px 0px -50px 0px",
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("scroll-reveal");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, observerOptions);
+
+      // Observe sections
+      document.querySelectorAll("section:not(.hero)").forEach((section) => {
+        observer.observe(section);
+      });
+
+      // Observe individual cards/articles with delays
+      document
+        .querySelectorAll(".feature-grid article, .workflow-steps article")
+        .forEach((el, index) => {
+          el.classList.add("delay-" + ((index % 3) + 1));
+          observer.observe(el);
+        });
+    </script>
+  </body>
 </html>

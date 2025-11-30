@@ -993,6 +993,14 @@ messageForm.addEventListener("submit", (e) => {
     hideAutocomplete();
 });
 
+// Handle Enter key for textarea (Enter to submit, Shift+Enter for new line)
+messageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        messageForm.dispatchEvent(new Event("submit"));
+    }
+});
+
 window.addEventListener("beforeunload", () => {
     if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);

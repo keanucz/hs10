@@ -3,33 +3,73 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Projects - ReplyChat</title>
+    <title>Projects · ReplyChat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/projects.css" />
   </head>
-  <body>
+  <body class="projects-body">
     <div class="projects-container">
-      <header class="projects-header">
-        <div class="header-content">
-          <h1>ReplyChat Projects</h1>
-          <div class="header-actions">
-            <span class="user-name">{{.Username}}</span>
+      <header class="projects-hero">
+        <nav class="projects-nav container">
+          <div class="nav-left">
+            <div class="logo-mark small">↺</div>
+            <div>
+              <p class="logo-label">ReplyChat</p>
+              <p class="logo-sub">Your collaborative AI rooms</p>
+            </div>
+          </div>
+          <div class="nav-actions">
+            <span class="user-chip">
+              <strong>{{.Username}}</strong>
+              <small>online</small>
+            </span>
             <a href="/logout" class="btn-secondary">Logout</a>
+          </div>
+        </nav>
+        <div class="projects-hero-content container">
+          <div>
+            <span class="eyebrow">Active workspaces</span>
+            <h1>Choose a room or launch a new mission.</h1>
+            <p>
+              Every project gets an isolated repo workspace with Git-native
+              persistence, Kanban insights, and specialized agents ready to
+              pair-program.
+            </p>
+            <div class="hero-actions">
+              <button id="create-project-btn" class="btn-primary">
+                + Create New Project
+              </button>
+              <a href="/" class="ghost-link">Back</a>
+            </div>
+          </div>
+          <div class="hero-stats">
+            <div>
+              <p class="metric-value" id="project-count">—</p>
+              <p class="metric-label">Projects live</p>
+            </div>
+            <div>
+              <p class="metric-value">5 agents</p>
+              <p class="metric-label">Bootstrapped per room</p>
+            </div>
+            <div>
+              <p class="metric-value">Git-native</p>
+              <p class="metric-label">Workspace type</p>
+            </div>
           </div>
         </div>
       </header>
 
-      <main class="projects-main">
-        <div class="projects-intro">
-          <h2>Your Projects</h2>
-          <p>
-            Select a project to work with your AI team, or create a new one.
-          </p>
-          <button id="create-project-btn" class="btn-primary">
-            + Create New Project
-          </button>
-        </div>
-
+      <main class="projects-main container">
         <div class="projects-grid" id="projects-grid">
           <div class="loading">Loading projects...</div>
         </div>
@@ -138,5 +178,12 @@
       };
     </script>
     <script src="/static/projects.js"></script>
+    <script>
+      document.addEventListener("projects:loaded", function (event) {
+        const count = event.detail?.count ?? 0;
+        const counter = document.getElementById("project-count");
+        if (counter) counter.textContent = count;
+      });
+    </script>
   </body>
 </html>

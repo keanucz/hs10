@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReplyChat · Chota Experiment</title>
+    <link rel="stylesheet" href="https://unpkg.com/chota@latest" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap"
+    />
+    <style>
+      body {
+        font-family: "Space Grotesk", system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(135deg, #0f172a, #312e81);
+        color: #f8fafc;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      .demo-shell {
+        width: min(1100px, 100%);
+        background: rgba(15, 23, 42, 0.85);
+        border-radius: 2rem;
+        padding: 3rem;
+        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.35);
+      }
+      .grid.gap {
+        gap: 2rem;
+      }
+      .badge {
+        background: rgba(59, 130, 246, 0.2);
+        border-radius: 999px;
+        padding: 0.35rem 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-size: 0.75rem;
+      }
+      .hero h1 {
+        font-size: clamp(2.5rem, 4vw, 4rem);
+        margin: 1rem 0;
+      }
+      .card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="demo-shell">
+      <div class="grid gap">
+        <article class="hero col">
+          <span class="badge">Chota prototype</span>
+          <h1>Ship alternative looks in minutes.</h1>
+          <p>
+            This page recreates the ReplyChat call-to-action using the
+            ultra-lightweight
+            <strong>Chota</strong> framework (&lt;7kb). It's perfect for
+            hackathon demos where you want a minimal yet expressive UI toolkit.
+          </p>
+          <p>
+            Compare this to the Pico-powered primary landing page to decide
+            which aesthetic you prefer for onboarding.
+          </p>
+          <div class="row">
+            <button class="button primary">Launch Workspace</button>
+            <button class="button outline">Schedule a walkthrough</button>
+          </div>
+        </article>
+        <article class="card col">
+          <h4>What changes between frameworks?</h4>
+          <ul>
+            <li>Typography + spacing tokens</li>
+            <li>Default button, badge, and card styling</li>
+            <li>Form controls with zero custom CSS</li>
+          </ul>
+          <p>
+            View this experiment at
+            <code>/static/experiments/landing-chota.html</code> while the dev
+            server is running.
+          </p>
+        </article>
+      </div>
+    </section>
+  </body>
+</html>

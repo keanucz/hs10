@@ -1,158 +1,222 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project - ReplyChat</title>
-    <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body>
-    <div class="app-container">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project · ReplyChat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="app-body">
+    <div class="workspace-shell">
+      <header class="workspace-topbar container">
+        <div class="topbar-left">
+          <div class="logo-mark small">↺</div>
+          <div>
+            <p class="logo-label">ReplyChat</p>
+            <p class="logo-sub">{{.ProjectName}}</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="chip chip-live">Live workspace</span>
+          <a href="/projects" class="btn-ghost">← All Projects</a>
+          <a href="/logout" class="btn-outline">Logout</a>
+        </div>
+      </header>
+
+      <div class="app-container">
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>ReplyChat</h2>
-                <div class="user-info">
-                    <span class="user-name">{{.Username}}</span>
-                    <a href="/logout" class="logout-link">Logout</a>
-                </div>
+          <div class="sidebar-header">
+            <h2>ReplyChat</h2>
+            <div class="user-info">
+              <span class="user-name">{{.Username}}</span>
             </div>
+          </div>
 
-            <div class="project-info">
-                <h3>Current Project</h3>
-                <p class="project-name">{{.ProjectName}}</p>
-                <a href="/projects" class="project-switch">← All Projects</a>
-            </div>
+          <div class="project-info">
+            <h3>Current Project</h3>
+            <p class="project-name">{{.ProjectName}}</p>
+            <a href="/projects" class="btn-ghost project-switch"
+              >← All Projects</a
+            >
+          </div>
 
-            <div class="agents-section">
-                <h3>Active Agents</h3>
-                <div id="agents-list" class="agents-list">
-                    <div class="agent-card" data-agent-id="product_manager">
-                        <div class="agent-avatar">PM</div>
-                        <div class="agent-details">
-                            <div class="agent-name">Product Manager</div>
-                            <div class="agent-status idle">Idle</div>
-                            <div class="agent-task">No active task</div>
-                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
-                        </div>
-                    </div>
-                    <div class="agent-card" data-agent-id="backend_architect">
-                        <div class="agent-avatar">BA</div>
-                        <div class="agent-details">
-                            <div class="agent-name">Backend Architect</div>
-                            <div class="agent-status idle">Idle</div>
-                            <div class="agent-task">No active task</div>
-                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
-                        </div>
-                    </div>
-                    <div class="agent-card" data-agent-id="frontend_developer">
-                        <div class="agent-avatar">FE</div>
-                        <div class="agent-details">
-                            <div class="agent-name">Frontend Developer</div>
-                            <div class="agent-status idle">Idle</div>
-                            <div class="agent-task">No active task</div>
-                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
-                        </div>
-                    </div>
-                    <div class="agent-card" data-agent-id="qa_tester">
-                        <div class="agent-avatar">QA</div>
-                        <div class="agent-details">
-                            <div class="agent-name">QA Tester</div>
-                            <div class="agent-status idle">Idle</div>
-                            <div class="agent-task">No active task</div>
-                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
-                        </div>
-                    </div>
-                    <div class="agent-card" data-agent-id="devops_engineer">
-                        <div class="agent-avatar">DE</div>
-                        <div class="agent-details">
-                            <div class="agent-name">DevOps Engineer</div>
-                            <div class="agent-status idle">Idle</div>
-                            <div class="agent-task">No active task</div>
-                            <div class="agent-queue-badge">Queue <span class="agent-queue-count">0</span></div>
-                        </div>
-                    </div>
+          <div class="agents-section">
+            <h3>Active Agents</h3>
+            <div id="agents-list" class="agents-list">
+              <div class="agent-card" data-agent-id="product_manager">
+                <div class="agent-avatar">PM</div>
+                <div class="agent-details">
+                  <div class="agent-name">Product Manager</div>
+                  <div class="agent-status idle">Idle</div>
+                  <div class="agent-task">No active task</div>
+                  <div class="agent-queue-badge">
+                    Queue <span class="agent-queue-count">0</span>
+                  </div>
                 </div>
+              </div>
+              <div class="agent-card" data-agent-id="backend_architect">
+                <div class="agent-avatar">BA</div>
+                <div class="agent-details">
+                  <div class="agent-name">Backend Architect</div>
+                  <div class="agent-status idle">Idle</div>
+                  <div class="agent-task">No active task</div>
+                  <div class="agent-queue-badge">
+                    Queue <span class="agent-queue-count">0</span>
+                  </div>
+                </div>
+              </div>
+              <div class="agent-card" data-agent-id="frontend_developer">
+                <div class="agent-avatar">FE</div>
+                <div class="agent-details">
+                  <div class="agent-name">Frontend Developer</div>
+                  <div class="agent-status idle">Idle</div>
+                  <div class="agent-task">No active task</div>
+                  <div class="agent-queue-badge">
+                    Queue <span class="agent-queue-count">0</span>
+                  </div>
+                </div>
+              </div>
+              <div class="agent-card" data-agent-id="qa_tester">
+                <div class="agent-avatar">QA</div>
+                <div class="agent-details">
+                  <div class="agent-name">QA Tester</div>
+                  <div class="agent-status idle">Idle</div>
+                  <div class="agent-task">No active task</div>
+                  <div class="agent-queue-badge">
+                    Queue <span class="agent-queue-count">0</span>
+                  </div>
+                </div>
+              </div>
+              <div class="agent-card" data-agent-id="devops_engineer">
+                <div class="agent-avatar">DE</div>
+                <div class="agent-details">
+                  <div class="agent-name">DevOps Engineer</div>
+                  <div class="agent-status idle">Idle</div>
+                  <div class="agent-task">No active task</div>
+                  <div class="agent-queue-badge">
+                    Queue <span class="agent-queue-count">0</span>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
 
-            <div class="task-summary">
-                <h3>Task Queue</h3>
-                <div id="task-counts">
-                    <div class="task-stat">
-                        <span class="stat-label">Proposed:</span>
-                        <span class="stat-value" id="proposed-count">0</span>
-                    </div>
-                    <div class="task-stat">
-                        <span class="stat-label">In Progress:</span>
-                        <span class="stat-value" id="inprogress-count">0</span>
-                    </div>
-                    <div class="task-stat">
-                        <span class="stat-label">Completed:</span>
-                        <span class="stat-value" id="completed-count">0</span>
-                    </div>
-                </div>
+          <div class="task-summary">
+            <h3>Task Queue</h3>
+            <div id="task-counts">
+              <div class="task-stat">
+                <span class="stat-label">Proposed:</span>
+                <span class="stat-value" id="proposed-count">0</span>
+              </div>
+              <div class="task-stat">
+                <span class="stat-label">In Progress:</span>
+                <span class="stat-value" id="inprogress-count">0</span>
+              </div>
+              <div class="task-stat">
+                <span class="stat-label">Completed:</span>
+                <span class="stat-value" id="completed-count">0</span>
+              </div>
             </div>
+          </div>
         </aside>
 
         <main class="main-content">
-            <div class="chat-header">
-                <h2>Team Chat</h2>
-                <div class="header-actions">
-                    <a href="/kanban?id={{.ProjectID}}" class="btn-secondary">📋 View Kanban</a>
-                </div>
+          <div class="chat-header">
+            <h2>Team Chat</h2>
+            <div class="header-actions">
+              <a href="/kanban?id={{.ProjectID}}" class="btn-secondary"
+                >📋 View Kanban</a
+              >
+            </div>
+          </div>
+
+          <div class="chat-container">
+            <div id="messages" class="messages-area">
+              <div class="system-message">
+                <p>
+                  Welcome to ReplyChat! Start a conversation with your AI
+                  agents.
+                </p>
+              </div>
             </div>
 
-            <div class="chat-container">
-                <div id="messages" class="messages-area">
-                    <div class="system-message">
-                        <p>Welcome to ReplyChat! Start a conversation with your AI agents.</p>
-                    </div>
-                </div>
-
-                <div class="message-input-container">
-                    <form id="message-form" class="message-form">
-                        <input
-                            type="text"
-                            id="message-input"
-                            placeholder="Type a message... (use @AgentName to mention)"
-                            autocomplete="off"
-                            required
-                        >
-                        <button type="submit" class="btn-primary">Send</button>
-                    </form>
-                </div>
+            <div class="message-input-container">
+              <form id="message-form" class="message-form">
+                <textarea
+                  id="message-input"
+                  placeholder="Type a message... (use @AgentName to mention)"
+                  autocomplete="off"
+                  rows="3"
+                  required
+                ></textarea>
+                <button type="submit" class="btn-primary">Send</button>
+              </form>
             </div>
+          </div>
         </main>
 
-        <aside class="right-panel">
-            <div class="panel-header">
-                <h3>Quick Actions</h3>
-            </div>
+        <aside class="right-panel" id="right-panel">
+          <div class="panel-header">
+            <h3>Quick Actions</h3>
+            <button
+              class="panel-toggle"
+              id="panel-toggle"
+              aria-label="Toggle panel"
+            >
+              <span class="toggle-icon">◀</span>
+            </button>
+          </div>
 
-            <div class="quick-actions">
-                <button class="action-btn">Create Task</button>
-                <button class="action-btn">Add Agent</button>
-                <button class="action-btn">View Analytics</button>
-            </div>
+          <div class="quick-actions">
+            <button class="action-btn">Create Task</button>
+            <button class="action-btn">Add Agent</button>
+            <button class="action-btn">View Analytics</button>
+          </div>
 
-            <div class="active-tasks">
-                <h3>Active Tasks</h3>
-                <div id="active-tasks-list">
-                    <p class="empty-state">No active tasks</p>
-                </div>
+          <div class="active-tasks">
+            <h3>Active Tasks</h3>
+            <div id="active-tasks-list">
+              <p class="empty-state">No active tasks</p>
             </div>
+          </div>
         </aside>
+      </div>
     </div>
 
     <script>
-        window.userData = {
-            userId: "{{.UserID}}",
-            username: "{{.Username}}",
-            email: "{{.Email}}",
-            projectId: "{{.ProjectID}}",
-            projectName: "{{.ProjectName}}"
-        };
+      window.userData = {
+        userId: "{{.UserID}}",
+        username: "{{.Username}}",
+        email: "{{.Email}}",
+        projectId: "{{.ProjectID}}",
+        projectName: "{{.ProjectName}}",
+      };
+
+      // Toggle right panel
+      document.addEventListener("DOMContentLoaded", function () {
+        const panel = document.getElementById("right-panel");
+        const toggle = document.getElementById("panel-toggle");
+        const toggleIcon = toggle.querySelector(".toggle-icon");
+
+        toggle.addEventListener("click", function () {
+          panel.classList.toggle("collapsed");
+          toggleIcon.textContent = panel.classList.contains("collapsed")
+            ? "▶"
+            : "◀";
+        });
+      });
     </script>
-    <div id="dialog-overlay" class="dialog-overlay" style="display: none;"></div>
+    <div id="dialog-overlay" class="dialog-overlay" style="display: none"></div>
     <script src="/static/app.js"></script>
-</body>
+  </body>
 </html>

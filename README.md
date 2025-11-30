@@ -28,17 +28,21 @@ replychat/
 ## Technology Stack
 
 **Backend:**
+
 - Go 1.24 with standard library HTTP server
 - Gorilla WebSocket for real-time communication
 - SQLite with WAL mode for persistence
 - Embedded templates and static files
 
 **Frontend:**
+
 - Vanilla JavaScript with WebSocket client
-- CSS with responsive design
-- Server-rendered HTML templates
+- Pico.css (classless, lightweight CSS) layered with custom Space Grotesk theming
+- Server-rendered HTML templates and reusable static assets
+- Optional experimental landing pages under `static/experiments/`
 
 **Database:**
+
 - SQLite with WAL mode
 - Schema includes: users, sessions, projects, messages, agents, issues, artifacts
 
@@ -138,12 +142,18 @@ CGO_ENABLED=0 go build -o replychat ./src
 1. Enter the project name and an optional description
 1. Choose the workspace source:
 
-  - **Initialize an empty Git repository** – creates `data/projects/<project-id>` and runs `git init`
-  - **Clone an existing repository** – provide any HTTPS/SSH remote; the server clones it into the workspace directory
+    - **Initialize an empty Git repository** – creates `data/projects/<project-id>` and runs `git init`
+    - **Clone an existing repository** – provide any HTTPS/SSH remote; the server clones it into the workspace directory
 
 1. Submit the form to create the project; the API responds with the workspace path for logging
 
 Workspaces live on disk under `data/projects/`. Agents never leave this directory tree thanks to secure path joining. The agent action plans (see `OPENAI_INTEGRATION.md`) create and mutate files directly in these folders, so you can open them in your editor or run `git status` immediately after an agent responds.
+
+### Design System & Landing Page Experiments
+
+- `template/index.html` now features a cinematic hero, workflow timeline, testimonial grid, and CTA banner styled with Pico.css and custom CSS variables.
+- Authenticated experiences (`projects.html`, `project.html`, `kanban.html`) share the same design language: Space Grotesk typography, glass panels, gradients, and refreshed buttons/cards.
+- Compare lightweight CSS frameworks by visiting `http://localhost:8080/static/experiments/landing-chota.html`, which uses the sub-7KB [Chota](https://jenil.github.io/chota) framework. Duplicate that file to prototype additional looks from the [awesome-css-frameworks](https://github.com/troxler/awesome-css-frameworks) list.
 
 ### Chat Interface
 

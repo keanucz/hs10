@@ -99,6 +99,9 @@ func LoadSettings(db *sql.DB, projectID string) (Settings, error) {
 }
 
 func initRepo(path string) error {
+	if err := ensureGitBinary(); err != nil {
+		return err
+	}
 	cmd := exec.Command("git", "init")
 	cmd.Dir = path
 	var stderr bytes.Buffer
@@ -110,6 +113,9 @@ func initRepo(path string) error {
 }
 
 func cloneRepo(repoURL, path string) error {
+	if err := ensureGitBinary(); err != nil {
+		return err
+	}
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("workspace %s already exists", path)
 	}
@@ -127,6 +133,9 @@ func configureRemote(path, repoURL string) error {
 	repoURL = strings.TrimSpace(repoURL)
 	if repoURL == "" {
 		return nil
+	}
+	if err := ensureGitBinary(); err != nil {
+		return err
 	}
 
 	cmd := exec.Command("git", "remote", "add", "origin", repoURL)

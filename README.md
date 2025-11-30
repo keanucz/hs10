@@ -74,6 +74,7 @@ replychat/
 ### Prerequisites
 
 - Go 1.24 or higher
+- Git 2.30+ available on your PATH (agents rely on native `git` commands for workspaces)
 - Docker (optional, for containerized deployment)
 
 ### Local Development
@@ -113,7 +114,7 @@ replychat/
 
 ### Docker Deployment
 
-1. Build and run with Docker Compose:
+1. Build and run with Docker Compose (make sure a writable `./data` directory exists first – it's bind-mounted to `/app/data` inside the container so SQLite and workspaces persist):
 
   ```bash
   docker-compose up --build

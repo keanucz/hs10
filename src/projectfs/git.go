@@ -83,6 +83,9 @@ func sanitizeCommitMessage(msg string) string {
 }
 
 func runGit(path string, args ...string) error {
+	if err := ensureGitBinary(); err != nil {
+		return err
+	}
 	cmd := exec.Command("git", args...)
 	cmd.Dir = path
 	var stderr bytes.Buffer
@@ -94,6 +97,9 @@ func runGit(path string, args ...string) error {
 }
 
 func gitOutput(path string, args ...string) (string, error) {
+	if err := ensureGitBinary(); err != nil {
+		return "", err
+	}
 	cmd := exec.Command("git", args...)
 	cmd.Dir = path
 	var stdout, stderr bytes.Buffer

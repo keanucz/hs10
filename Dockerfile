@@ -3,6 +3,7 @@ FROM golang:1.24 AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
+COPY go-llama.cpp ./go-llama.cpp
 RUN go mod download
 
 COPY . .

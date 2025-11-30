@@ -207,7 +207,7 @@ Type `@` to see autocomplete dropdown. Use arrow keys or click to select.
 ### AI Providers
 
 - OpenAI GPT-4o Mini (default): Set `OPENAI_API_KEY` and the agents will call OpenAI's Responses API (see `OPENAI_INTEGRATION.md`).
-- Local llama.cpp model: If `OPENAI_API_KEY` is empty but `LOCAL_LLM_MODEL` points to a `.gguf` file, agents run fully on your machine via the bundled `go-llama.cpp` bindings. Configure advanced options and build instructions in `LOCAL_LLM.md`.
+- Local llama.cpp model: If `OPENAI_API_KEY` is empty but `LOCAL_LLM_MODEL` points to a `.gguf` file **and you compile with `-tags local_llm`**, agents run fully on your machine via the bundled `go-llama.cpp` bindings. Configure advanced options and build instructions in `LOCAL_LLM.md`.
 
 ### WebSocket Protocol
 

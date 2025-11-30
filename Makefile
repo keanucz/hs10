@@ -40,11 +40,15 @@ docker-down:
 	@echo "Stopping Docker containers..."
 	@docker-compose down
 
-llama-bindings: go-llama.cpp/libbinding.a
+LLAMA_DIR ?= go-llama.cpp
 
-go-llama.cpp/libbinding.a:
+llama-bindings:
+ifeq (,$(wildcard $(LLAMA_DIR)))
+	@echo "Skipping llama.cpp bindings (directory '$(LLAMA_DIR)' not found)"
+else
 	@echo "Building llama.cpp bindings..."
-	@$(MAKE) -C go-llama.cpp libbinding.a >/dev/null
+	@$(MAKE) -C $(LLAMA_DIR) libbinding.a >/dev/null
+endif
 
 help:
 	@echo "Available commands:"

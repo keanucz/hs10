@@ -1,3 +1,5 @@
+//go:build local_llm
+
 package agents
 
 import (

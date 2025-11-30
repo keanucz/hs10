@@ -2,6 +2,8 @@
 
 The project vendors [go-llama.cpp](https://github.com/go-skynet/go-llama.cpp), so the agents can run entirely offline on your hardware. When `OPENAI_API_KEY` is **not** set but `LOCAL_LLM_MODEL` points to a `.gguf` file, all agent replies are generated through llama.cpp instead of the OpenAI API.
 
+> ⚠️ You must build ReplyChat with the `local_llm` build tag to enable the llama.cpp integration (e.g. `go run -tags local_llm ./src` or `make build LOCAL_LLMTAGS=-tags local_llm`). Without the tag the server skips the local bindings and continues using the hosted providers.
+
 ## 1. Build the native binding
 
 The llama.cpp binding ships as C++ code. Build it once after cloning or whenever you update submodules:

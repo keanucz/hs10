@@ -1523,7 +1523,7 @@ func broadcastAgentQueueSnapshot(hub *Hub, projectID string, stats []AgentQueueS
 
 	select {
 	case hub.broadcast <- data:
-	default:
+	case <-time.After(500 * time.Millisecond):
 		log.Printf("queue: dropping snapshot broadcast for project %s", projectID)
 	}
 }
@@ -1549,7 +1549,7 @@ func broadcastAgentStatusSnapshot(hub *Hub, projectID string, stats []AgentQueue
 
 	select {
 	case hub.broadcast <- data:
-	default:
+	case <-time.After(500 * time.Millisecond):
 		log.Printf("agent status: dropping snapshot for project %s", projectID)
 	}
 }

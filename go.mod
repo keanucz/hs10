@@ -3,6 +3,7 @@ module replychat
 go 1.24
 
 require (
+	github.com/go-skynet/go-llama.cpp v0.0.0
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
@@ -32,3 +33,5 @@ require (
 	modernc.org/memory v1.7.2 // indirect
 	modernc.org/sqlite v1.28.0 // indirect
 )
+
+replace github.com/go-skynet/go-llama.cpp => ./go-llama.cpp

@@ -1,6 +1,6 @@
 # OpenAI Integration Guide
 
-ReplyChat uses OpenAI's GPT-4o-mini through the official Go SDK (`github.com/openai/openai-go/v3`). Agents now return real code changes that are applied to each project's workspace.
+ReplyChat uses OpenAI's GPT-4o-mini through the official Go SDK (`github.com/openai/openai-go/v3`). Agents now return real code changes that are applied to each project's workspace. Prefer a fully offline flow? Configure the bundled llama.cpp backend described in `LOCAL_LLM.md`.
 
 ## What Changed
 

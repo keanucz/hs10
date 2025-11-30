@@ -1,15 +1,15 @@
-.PHONY: build run dev clean test docker-build docker-up docker-down
+.PHONY: build run dev clean test docker-build docker-up docker-down llama-bindings
 
 build:
 	@echo "Building replychat..."
 	@go build -o replychat ./src
 	@echo "Build complete: ./replychat"
 
-run: build
+run: llama-bindings build
 	@echo "Starting replychat..."
 	@./replychat
 
-dev:
+dev: llama-bindings
 	@echo "Running in development mode..."
 	@go run ./src
 
@@ -39,6 +39,12 @@ docker-up:
 docker-down:
 	@echo "Stopping Docker containers..."
 	@docker-compose down
+
+llama-bindings: go-llama.cpp/libbinding.a
+
+go-llama.cpp/libbinding.a:
+	@echo "Building llama.cpp bindings..."
+	@$(MAKE) -C go-llama.cpp libbinding.a >/dev/null
 
 help:
 	@echo "Available commands:"

@@ -25,6 +25,7 @@ type MessageProcessor struct {
 	db        *sql.DB
 	broadcast chan<- []byte
 	aiClient  *openai.Client
+	localLLM  *LocalLLM
 }
 
 type AgentResponse struct {
@@ -119,10 +120,16 @@ func newMessageProcessor(db *sql.DB, broadcast chan<- []byte) *MessageProcessor 
 		client = &newClient
 	}
 
+	localLLM, err := getLocalLLM()
+	if err != nil {
+		log.Printf("agent: local LLM initialization failed: %v", err)
+	}
+
 	return &MessageProcessor{
 		db:        db,
 		broadcast: broadcast,
 		aiClient:  client,
+		localLLM:  localLLM,
 	}
 }
 
@@ -153,58 +160,67 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, issueID, 
 		log.Printf("workspace: failed to prepare workspace for project %s: %v", projectID, workspaceErr)
 	}
 
-	if p.aiClient != nil {
-		systemPrompts := map[string]string{
-			"product_manager": fmt.Sprintf(`You are a Product Manager AI agent in a collaborative team workspace.
+	systemPrompts := map[string]string{
+		"product_manager": fmt.Sprintf(`You are a Product Manager AI agent in a collaborative team workspace.
 		Your role is to gather requirements, create user stories, and define project scope.
 		Be concise and helpful. Ask clarifying questions when needed.
 		Keep responses under 200 words.
 
 		%s`, planFormatInstructions),
 
-			"backend_architect": fmt.Sprintf(`You are a Backend Architect AI agent in a collaborative team workspace.
+		"backend_architect": fmt.Sprintf(`You are a Backend Architect AI agent in a collaborative team workspace.
 	Your role is to design APIs, database schemas, and server architecture.
 	Be technical but clear. Provide concrete suggestions.
 	Keep responses under 200 words.
 
 	%s`, planFormatInstructions),
 
-			"frontend_developer": fmt.Sprintf(`You are a Frontend Developer AI agent in a collaborative team workspace.
+		"frontend_developer": fmt.Sprintf(`You are a Frontend Developer AI agent in a collaborative team workspace.
 	Your role is to build UI components, handle state management, and ensure responsive design.
 	Be practical and focus on implementation. Share best practices.
 	Keep responses under 200 words.
 
 	%s`, planFormatInstructions),
 
-			"qa_tester": fmt.Sprintf(`You are a QA Tester AI agent in a collaborative team workspace.
+		"qa_tester": fmt.Sprintf(`You are a QA Tester AI agent in a collaborative team workspace.
 	Your role is to validate new functionality, design automated/manual tests, and report regressions.
 	Describe the scenarios you verify, add or update test files, and share any defects you find.
 	Keep responses under 200 words.
 
 	%s`, planFormatInstructions),
 
-			"devops_engineer": fmt.Sprintf(`You are a DevOps Engineer AI agent in a collaborative team workspace.
+		"devops_engineer": fmt.Sprintf(`You are a DevOps Engineer AI agent in a collaborative team workspace.
 	Your role is to manage infrastructure, CI/CD pipelines, deployment scripts, and operational tooling.
-	Provide practical improvements, update configs/scripts, and verify commands.
-	Keep responses under 200 words.
+		Provide practical improvements, update configs/scripts, and verify commands.
+		Keep responses under 200 words.
 
-	%s`, planFormatInstructions),
-		}
+		%s`, planFormatInstructions),
+	}
+	systemPrompt, ok := systemPrompts[agentType]
+	if !ok || strings.TrimSpace(systemPrompt) == "" {
+		systemPrompt = fmt.Sprintf(`You are a collaborative software agent. Keep responses under 200 words.
 
+%s`, planFormatInstructions)
+	}
+
+	var workspacePrompt string
+	if workspaceErr == nil && workspacePath != "" {
+		workspacePrompt = "Workspace root alias: ./ (project root). Always reference files relative to this root (e.g. src/routes/index.ts). Never mention host-specific paths under data/projects/…"
+	}
+
+	var rawLLMOutput string
+
+	switch {
+	case p.aiClient != nil:
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		inputMessages := responses.ResponseInputParam{
-			responses.ResponseInputItemParamOfMessage(systemPrompts[agentType], responses.EasyInputMessageRoleSystem),
+			responses.ResponseInputItemParamOfMessage(systemPrompt, responses.EasyInputMessageRoleSystem),
 		}
-
-		if workspaceErr == nil && workspacePath != "" {
-			inputMessages = append(inputMessages, responses.ResponseInputItemParamOfMessage(
-				"Workspace root alias: ./ (project root). Always reference files relative to this root (e.g. src/routes/index.ts). Never mention host-specific paths under data/projects/…",
-				responses.EasyInputMessageRoleSystem,
-			))
+		if workspacePrompt != "" {
+			inputMessages = append(inputMessages, responses.ResponseInputItemParamOfMessage(workspacePrompt, responses.EasyInputMessageRoleSystem))
 		}
-
 		inputMessages = append(inputMessages, responses.ResponseInputItemParamOfMessage(originalMessage, responses.EasyInputMessageRoleUser))
 
 		resp, err := p.aiClient.Responses.New(ctx, responses.ResponseNewParams{
@@ -218,59 +234,27 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, issueID, 
 			log.Printf("agent: OpenAI API error: %v", err)
 			responseText = p.getFallbackResponse(agentType)
 		} else if output := resp.OutputText(); output != "" {
-			cleanOutput, blocks := extractStructuredBlocks(output)
-			if len(blocks) > 0 {
-				structuredNotes := p.handleStructuredBlocks(projectID, agentType, blocks)
-				planNotes = append(planNotes, structuredNotes...)
-			}
-
-			processedOutput := strings.TrimSpace(cleanOutput)
-			if processedOutput == "" {
-				processedOutput = "Structured actions processed."
-			}
-
-			if workspaceErr == nil {
-				plan, planErr := parseActionPlan(processedOutput)
-				if planErr == nil {
-					planCopy := plan
-					planForMessage = &planCopy
-				}
-				if planErr == nil && plan.HasChanges() {
-					summary, applyErr := p.applyActionPlan(workspacePath, agentType, plan)
-					if applyErr != nil {
-						log.Printf("agent: failed to apply plan for project %s: %v", projectID, applyErr)
-						responseText = fmt.Sprintf("%s produced changes but hit an error: %v", agentDisplayNames[agentType], applyErr)
-					} else {
-						responseText = summary
-						planNotes = append(planNotes, plan.Notes...)
-						commitMsg := buildCommitMessage(agentType, issueTitle, summary, planNotes)
-						if commitMsg != "" {
-							result, gitErr := projectfs.CommitWorkspaceChanges(workspacePath, commitMsg)
-							if gitErr != nil {
-								log.Printf("git: commit workflow failed for project %s: %v", projectID, gitErr)
-							}
-							if result != nil {
-								gitResult = result
-								if note := gitNote(result, gitErr); note != "" {
-									planNotes = append(planNotes, note)
-								}
-							} else if gitErr != nil {
-								planNotes = append(planNotes, fmt.Sprintf("Git commit skipped: %v", gitErr))
-							}
-						}
-					}
-				} else {
-					responseText = processedOutput
-				}
-			} else {
-				responseText = processedOutput
-			}
+			rawLLMOutput = output
 		} else {
 			responseText = p.getFallbackResponse(agentType)
 		}
-	} else {
-		log.Printf("agent: No OpenAI API key configured, using fallback")
+
+	case p.localLLM != nil:
+		output, err := p.localLLM.Generate(context.Background(), systemPrompt, workspacePrompt, originalMessage)
+		if err != nil {
+			log.Printf("agent: local LLM error: %v", err)
+			responseText = p.getFallbackResponse(agentType)
+		} else {
+			rawLLMOutput = output
+		}
+
+	default:
+		log.Printf("agent: No AI provider configured, using fallback")
 		responseText = p.getFallbackResponse(agentType)
+	}
+
+	if rawLLMOutput != "" {
+		responseText, planNotes, planForMessage, gitResult = p.processLLMOutput(projectID, agentType, issueTitle, rawLLMOutput, planNotes, workspacePath, workspaceErr)
 	}
 
 	p.sendAgentMessage(projectID, agentType, responseText, "chat", planNotes, workspacePath, planForMessage, gitResult)
@@ -289,6 +273,58 @@ func (p *MessageProcessor) generateAgentResponse(projectID, agentType, issueID, 
 
 func (plan AgentActionPlan) HasChanges() bool {
 	return len(plan.Files) > 0 || len(plan.Mutations) > 0
+}
+
+func (p *MessageProcessor) processLLMOutput(projectID, agentType, issueTitle, rawOutput string, planNotes []string, workspacePath string, workspaceErr error) (string, []string, *AgentActionPlan, *projectfs.CommitResult) {
+	cleanOutput, blocks := extractStructuredBlocks(rawOutput)
+	if len(blocks) > 0 {
+		structuredNotes := p.handleStructuredBlocks(projectID, agentType, blocks)
+		planNotes = append(planNotes, structuredNotes...)
+	}
+
+	processedOutput := strings.TrimSpace(cleanOutput)
+	if processedOutput == "" {
+		processedOutput = "Structured actions processed."
+	}
+
+	var planForMessage *AgentActionPlan
+	var gitResult *projectfs.CommitResult
+	responseText := processedOutput
+
+	if workspaceErr == nil {
+		plan, planErr := parseActionPlan(processedOutput)
+		if planErr == nil {
+			planCopy := plan
+			planForMessage = &planCopy
+		}
+		if planErr == nil && plan.HasChanges() {
+			summary, applyErr := p.applyActionPlan(workspacePath, agentType, plan)
+			if applyErr != nil {
+				log.Printf("agent: failed to apply plan for project %s: %v", projectID, applyErr)
+				responseText = fmt.Sprintf("%s produced changes but hit an error: %v", agentDisplayNames[agentType], applyErr)
+			} else {
+				responseText = summary
+				planNotes = append(planNotes, plan.Notes...)
+				commitMsg := buildCommitMessage(agentType, issueTitle, summary, planNotes)
+				if commitMsg != "" {
+					result, gitErr := projectfs.CommitWorkspaceChanges(workspacePath, commitMsg)
+					if gitErr != nil {
+						log.Printf("git: commit workflow failed for project %s: %v", projectID, gitErr)
+					}
+					if result != nil {
+						gitResult = result
+						if note := gitNote(result, gitErr); note != "" {
+							planNotes = append(planNotes, note)
+						}
+					} else if gitErr != nil {
+						planNotes = append(planNotes, fmt.Sprintf("Git commit skipped: %v", gitErr))
+					}
+				}
+			}
+		}
+	}
+
+	return responseText, planNotes, planForMessage, gitResult
 }
 
 func (p *MessageProcessor) sendAgentMessage(projectID, agentType, content, messageType string, notes []string, workspacePath string, plan *AgentActionPlan, gitInfo *projectfs.CommitResult) {

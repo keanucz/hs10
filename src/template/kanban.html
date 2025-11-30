@@ -18,16 +18,16 @@
   </head>
   <body class="kanban-body">
     <div class="kanban-app">
-      <header class="kanban-topbar">
+      <header class="chat-topbar">
         <div class="topbar-left">
           <div class="logo-mark small">↺</div>
           <div>
             <p class="logo-label">ReplyChat</p>
-            <p class="logo-sub">Kanban · {{.ProjectName}}</p>
+            <p class="logo-sub">{{.ProjectName}}</p>
           </div>
         </div>
         <div class="topbar-actions">
-          <a href="/project?id={{.ProjectID}}" class="btn-ghost">← Chat room</a>
+          <a href="/projects" class="btn-ghost">← All Projects</a>
           <a href="/logout" class="btn-outline">Logout</a>
         </div>
       </header>
